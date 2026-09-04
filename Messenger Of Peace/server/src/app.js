@@ -1,0 +1,86 @@
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const path = require('path');
+require('dotenv').config();
+
+const authRoutes = require('./routes/auth');
+const memberRoutes = require('./routes/members');
+const unitRoutes = require('./routes/units');
+const leadershipRoutes = require('./routes/leadership');
+const attendanceRoutes = require('./routes/attendance');
+const eventRoutes = require('./routes/events');
+const contributionRoutes = require('./routes/contributions');
+const financeRoutes = require('./routes/finance');
+const portfolioRoutes = require('./routes/portfolio');
+const postRoutes = require('./routes/posts');
+const mediaRoutes = require('./routes/media');
+const applicationRoutes = require('./routes/applications');
+const reportRoutes = require('./routes/reports');
+const settingRoutes = require('./routes/settings');
+const dashboardRoutes = require('./routes/dashboard');
+const contactMessageRoutes = require('./routes/contact-messages');
+const announcementRoutes = require('./routes/announcements');
+const userRoutes = require('./routes/users');
+const uploadRoutes = require('./routes/upload');
+const roleRoutes = require('./routes/roles');
+const auditLogRoutes = require('./routes/audit-logs');
+const notificationRoutes = require('./routes/notifications');
+const memberApplicationRoutes = require('./routes/member-applications');
+const activityRoutes = require('./routes/activities');
+const galleryRoutes = require('./routes/gallery');
+const libraryRoutes = require('./routes/library');
+const homepageRoutes = require('./routes/homepage');
+const aboutRoutes = require('./routes/about');
+const navigationRoutes = require('./routes/navigation');
+const seoRoutes = require('./routes/seo');
+const informationRoutes = require('./routes/information');
+
+const app = express();
+
+app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(cors({ origin: process.env.NODE_ENV === 'production' ? 'https://yourdomain.com' : '*', credentials: true }));
+app.use(morgan('dev'));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+app.use('/api/auth', authRoutes);
+app.use('/api/members', memberRoutes);
+app.use('/api/units', unitRoutes);
+app.use('/api/leadership', leadershipRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api/contributions', contributionRoutes);
+app.use('/api/finance', financeRoutes);
+app.use('/api/portfolio', portfolioRoutes);
+app.use('/api/posts', postRoutes);
+app.use('/api/media', mediaRoutes);
+app.use('/api/applications', applicationRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/settings', settingRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/contact-messages', contactMessageRoutes);
+app.use('/api/announcements', announcementRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/roles', roleRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/member-applications', memberApplicationRoutes);
+app.use('/api/activities', activityRoutes);
+app.use('/api/gallery', galleryRoutes);
+app.use('/api/library', libraryRoutes);
+app.use('/api/homepage', homepageRoutes);
+app.use('/api/about', aboutRoutes);
+app.use('/api/navigation', navigationRoutes);
+app.use('/api/seo', seoRoutes);
+app.use('/api/information', informationRoutes);
+
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(err.status || 500).json({ success: false, message: err.message || 'Internal Server Error' });
+});
+
+module.exports = app;
