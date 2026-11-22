@@ -79,14 +79,16 @@ export default function Gallery() {
           api.get('/gallery'),
         ])
 
-        const apiPhotos = imagesRes.status === 'fulfilled' ? (imagesRes.value.data?.images || imagesRes.value.data || []) : []
-        const apiAlbums = galleryRes.status === 'fulfilled' ? (galleryRes.value.data?.albums || galleryRes.value.data || []) : []
+        // Both endpoints answer { success, data: [...] }
+        const listFrom = res => (res.status === 'fulfilled' && Array.isArray(res.value.data?.data) ? res.value.data.data : [])
+        const apiPhotos = listFrom(imagesRes)
+        const apiAlbums = listFrom(galleryRes)
 
-        const normalizedApiPhotos = apiPhotos.map(img => ({
-          src: img.url || img.src || img.imageUrl,
-          title: img.title || img.name || 'Untitled',
-          date: img.date || img.createdAt?.slice(0, 4) || '2026',
-          category: img.category || img.album || 'Uncategorized',
+        const normalizedApiPhotos = apiPhotos.filter(img => img.image_url).map(img => ({
+          src: img.image_url,
+          title: img.title || img.album_title || 'Untitled',
+          date: img.created_at?.slice(0, 4) || '2026',
+          category: img.album_title || 'Uncategorized',
         }))
 
         const mergedPhotos = [...normalizedApiPhotos, ...fallbackPhotos.filter(

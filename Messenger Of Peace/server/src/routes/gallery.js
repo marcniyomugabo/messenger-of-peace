@@ -30,7 +30,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /admin - All albums (authenticated)
-router.get('/admin', authenticate, async (req, res) => {
+router.get('/admin', authenticate, authorize('super_admin', 'chief', 'media'), async (req, res) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
@@ -77,7 +77,7 @@ router.get('/images/public', async (req, res) => {
 });
 
 // GET /images - All images (authenticated, with album_id filter)
-router.get('/images', authenticate, async (req, res) => {
+router.get('/images', authenticate, authorize('super_admin', 'chief', 'media'), async (req, res) => {
   try {
     const { album_id, page = 1, limit = 30 } = req.query;
     const offset = (page - 1) * limit;

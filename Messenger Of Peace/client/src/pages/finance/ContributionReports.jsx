@@ -117,26 +117,26 @@ export default function ContributionReports() {
               </div>
             </Col>
             <Col md={2} sm={4} xs={6}>
-              <div className="kpi-card h-100" style={{ borderLeftColor: '#16a34a' }}>
-                <div className="kpi-value" style={{ color: '#16a34a' }}>RWF {(report.collected || 0).toLocaleString()}</div>
+              <div className="kpi-card h-100" style={{ borderLeftColor: 'var(--mop-success)' }}>
+                <div className="kpi-value" style={{ color: 'var(--mop-success)' }}>RWF {(report.collected || 0).toLocaleString()}</div>
                 <div className="kpi-label">Collected</div>
               </div>
             </Col>
             <Col md={2} sm={4} xs={6}>
-              <div className="kpi-card h-100" style={{ borderLeftColor: '#dc2626' }}>
-                <div className="kpi-value" style={{ color: '#dc2626' }}>RWF {(report.outstanding || 0).toLocaleString()}</div>
+              <div className="kpi-card h-100" style={{ borderLeftColor: 'var(--mop-danger)' }}>
+                <div className="kpi-value" style={{ color: 'var(--mop-danger)' }}>RWF {(report.outstanding || 0).toLocaleString()}</div>
                 <div className="kpi-label">Outstanding</div>
               </div>
             </Col>
             <Col md={2} sm={4} xs={6}>
-              <div className="kpi-card h-100" style={{ borderLeftColor: '#16a34a' }}>
-                <div className="kpi-value" style={{ color: '#16a34a' }}>{report.paid}</div>
+              <div className="kpi-card h-100" style={{ borderLeftColor: 'var(--mop-success)' }}>
+                <div className="kpi-value" style={{ color: 'var(--mop-success)' }}>{report.paid}</div>
                 <div className="kpi-label">Paid</div>
               </div>
             </Col>
             <Col md={2} sm={4} xs={6}>
-              <div className="kpi-card h-100" style={{ borderLeftColor: '#f59e0b' }}>
-                <div className="kpi-value" style={{ color: '#f59e0b' }}>{report.rate || 0}%</div>
+              <div className="kpi-card h-100" style={{ borderLeftColor: 'var(--mop-warning)' }}>
+                <div className="kpi-value" style={{ color: 'var(--mop-warning)' }}>{report.rate || 0}%</div>
                 <div className="kpi-label">Collection Rate</div>
               </div>
             </Col>
@@ -168,8 +168,8 @@ export default function ContributionReports() {
                       <td className="fw-semibold">{r.member_name}</td>
                       <td><Badge bg="primary">{r.unit_name || 'N/A'}</Badge></td>
                       <td>{Number(r.required_amount).toLocaleString()} RWF</td>
-                      <td className="fw-semibold" style={{ color: '#16a34a' }}>{Number(r.total_paid).toLocaleString()} RWF</td>
-                      <td style={{ color: r.balance > 0 ? '#dc2626' : '#6b7280' }}>{Number(r.balance).toLocaleString()} RWF</td>
+                      <td className="fw-semibold" style={{ color: 'var(--mop-success)' }}>{Number(r.total_paid).toLocaleString()} RWF</td>
+                      <td style={{ color: r.balance > 0 ? 'var(--mop-danger)' : '#6b7280' }}>{Number(r.balance).toLocaleString()} RWF</td>
                       <td>
                         <Badge bg={r.status === 'Paid' ? 'success' : r.status === 'Partial' ? 'warning' : 'danger'}>
                           {r.status}

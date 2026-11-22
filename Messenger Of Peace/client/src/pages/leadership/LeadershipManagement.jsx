@@ -10,7 +10,7 @@ export default function LeadershipManagement() {
   const [units, setUnits] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [editLeader, setEditLeader] = useState(null)
-  const [form, setForm] = useState({ member_id: '', position: '', unit_id: '', start_date: '', end_date: '', description: '' })
+  const [form, setForm] = useState({ member_id: '', position: '', unit_id: '', start_date: '', end_date: '', description: '', display_order: '' })
 
   useEffect(() => {
     fetchLeaders()
@@ -57,6 +57,7 @@ export default function LeadershipManagement() {
         start_date: form.start_date,
         end_date: form.end_date || null,
         description: form.description || null,
+        display_order: form.display_order === '' ? 100 : parseInt(form.display_order),
       }
       if (editLeader) {
         await api.put(`/leadership/${editLeader.id}`, payload)
@@ -66,7 +67,7 @@ export default function LeadershipManagement() {
         toast.success('Leader added')
       }
       setShowModal(false)
-      setForm({ member_id: '', position: '', unit_id: '', start_date: '', end_date: '', description: '' })
+      setForm({ member_id: '', position: '', unit_id: '', start_date: '', end_date: '', description: '', display_order: '' })
       setEditLeader(null)
       fetchLeaders()
     } catch (err) {
@@ -83,6 +84,7 @@ export default function LeadershipManagement() {
       start_date: leader.start_date ? leader.start_date.split('T')[0] : '',
       end_date: leader.end_date ? leader.end_date.split('T')[0] : '',
       description: leader.description || '',
+      display_order: leader.display_order ?? '',
     })
     setShowModal(true)
   }
@@ -102,7 +104,7 @@ export default function LeadershipManagement() {
     <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h4 className="mb-0">Board Members Management</h4>
-        <Button variant="primary" onClick={() => { setEditLeader(null); setForm({ member_id: '', position: '', unit_id: '', start_date: '', end_date: '', description: '' }); setShowModal(true) }}>
+        <Button variant="primary" onClick={() => { setEditLeader(null); setForm({ member_id: '', position: '', unit_id: '', start_date: '', end_date: '', description: '', display_order: '' }); setShowModal(true) }}>
           <FiPlus className="me-1" /> Add Leader
         </Button>
       </div>
@@ -112,7 +114,7 @@ export default function LeadershipManagement() {
           <Table className="mop-table mb-0">
             <thead>
               <tr>
-                <th>#</th>
+                <th>Order</th>
                 <th>Member</th>
                 <th>Position</th>
                 <th>Unit</th>
@@ -125,7 +127,7 @@ export default function LeadershipManagement() {
             <tbody>
               {leaders.map((leader, idx) => (
                 <tr key={leader.id}>
-                  <td>{idx + 1}</td>
+                  <td>{leader.display_order ?? idx + 1}</td>
                   <td className="fw-semibold">{leader.member_name || 'N/A'}</td>
                   <td><Badge bg="primary">{leader.position}</Badge></td>
                   <td>{leader.unit_name || 'All Units'}</td>
@@ -196,6 +198,11 @@ export default function LeadershipManagement() {
             <Form.Group className="mb-3">
               <Form.Label>Description</Form.Label>
               <Form.Control as="textarea" rows={2} name="description" value={form.description} onChange={handleChange} />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Order on website</Form.Label>
+              <Form.Control type="number" min="1" name="display_order" value={form.display_order} onChange={handleChange} placeholder="1 = shown first (the Chief)" />
+              <Form.Text className="text-muted">Lower numbers appear first on the public Board Members page.</Form.Text>
             </Form.Group>
           </Modal.Body>
           <Modal.Footer>

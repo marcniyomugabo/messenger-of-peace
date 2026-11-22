@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Container, Row, Col, Card, Badge, Button, Table } from 'react-bootstrap'
-import { FiArrowLeft, FiUser, FiPhone, FiMail, FiMapPin, FiDollarSign, FiExternalLink } from 'react-icons/fi'
+import { FiArrowLeft, FiUser, FiPhone, FiMail, FiMapPin, FiDollarSign, FiExternalLink, FiEdit2 } from 'react-icons/fi'
 import api from '../../services/api'
+import { ageOn } from '../../utils/date'
 
 const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
@@ -47,6 +48,9 @@ export default function MemberDetail() {
           <FiArrowLeft />
         </Button>
         <h4 className="mb-0">Member Profile</h4>
+        <Button as={Link} to={`/dashboard/members/${id}/edit`} variant="primary" size="sm" className="ms-auto">
+          <FiEdit2 className="me-1" /> Edit
+        </Button>
       </div>
 
       <Row className="g-4">
@@ -87,7 +91,15 @@ export default function MemberDetail() {
               <Row className="g-3">
                 <Col md={6}><strong>Member Code:</strong> {member.member_code || 'N/A'}</Col>
                 <Col md={6}><strong>Unit:</strong> <Badge bg="primary">{member.unit_name || 'N/A'}</Badge></Col>
-                <Col md={6}><strong>Date of Birth:</strong> {member.date_of_birth || 'N/A'}</Col>
+                <Col md={6}><strong>Gender:</strong> {member.gender || 'N/A'}</Col>
+                <Col md={6}><strong>Date of Birth:</strong> {member.date_of_birth ? `${member.date_of_birth} (${ageOn(member.date_of_birth)} years)` : 'N/A'}</Col>
+                <Col md={12}>
+                  <strong>Emergency contact:</strong>{' '}
+                  {(() => {
+                    const e = guardians.find(g => g.is_emergency)
+                    return e ? [e.guardian_name, e.relationship, e.phone].filter(Boolean).join(' · ') : <span className="text-danger">not recorded</span>
+                  })()}
+                </Col>
                 <Col md={6}><strong>School:</strong> {member.school || 'N/A'}</Col>
                 <Col md={6}><strong>Location:</strong> {member.location || 'N/A'}</Col>
                 <Col md={6}><strong>Join Date:</strong> {member.join_date || 'N/A'}</Col>
@@ -124,20 +136,20 @@ export default function MemberDetail() {
               <Card.Body>
                 <Row className="g-3 mb-4">
                   <Col md={2} sm={4} xs={6}>
-                    <div className="text-center p-3 rounded" style={{ background: '#F0FDF4' }}>
-                      <div className="fs-5 fw-bold" style={{ color: '#16a34a' }}>{contribData.paid_months || 0}</div>
+                    <div className="text-center p-3 rounded" style={{ background: 'var(--mop-success-bg)' }}>
+                      <div className="fs-5 fw-bold" style={{ color: 'var(--mop-success)' }}>{contribData.paid_months || 0}</div>
                       <small className="text-muted">Paid Months</small>
                     </div>
                   </Col>
                   <Col md={2} sm={4} xs={6}>
-                    <div className="text-center p-3 rounded" style={{ background: '#FEF2F2' }}>
-                      <div className="fs-5 fw-bold" style={{ color: '#dc2626' }}>{contribData.unpaid_months || 0}</div>
+                    <div className="text-center p-3 rounded" style={{ background: 'var(--mop-danger-bg)' }}>
+                      <div className="fs-5 fw-bold" style={{ color: 'var(--mop-danger)' }}>{contribData.unpaid_months || 0}</div>
                       <small className="text-muted">Unpaid</small>
                     </div>
                   </Col>
                   <Col md={2} sm={4} xs={6}>
                     <div className="text-center p-3 rounded" style={{ background: '#FEF9C3' }}>
-                      <div className="fs-5 fw-bold" style={{ color: '#f59e0b' }}>{contribData.partial_months || 0}</div>
+                      <div className="fs-5 fw-bold" style={{ color: 'var(--mop-warning)' }}>{contribData.partial_months || 0}</div>
                       <small className="text-muted">Partial</small>
                     </div>
                   </Col>
@@ -148,14 +160,14 @@ export default function MemberDetail() {
                     </div>
                   </Col>
                   <Col md={2} sm={4} xs={6}>
-                    <div className="text-center p-3 rounded" style={{ background: '#F0FDF4' }}>
-                      <div className="fs-5 fw-bold" style={{ color: '#16a34a' }}>RWF {(contribData.total_paid || 0).toLocaleString()}</div>
+                    <div className="text-center p-3 rounded" style={{ background: 'var(--mop-success-bg)' }}>
+                      <div className="fs-5 fw-bold" style={{ color: 'var(--mop-success)' }}>RWF {(contribData.total_paid || 0).toLocaleString()}</div>
                       <small className="text-muted">Total Paid</small>
                     </div>
                   </Col>
                   <Col md={2} sm={4} xs={6}>
-                    <div className="text-center p-3 rounded" style={{ background: contribData.outstanding > 0 ? '#FEF2F2' : '#F0FDF4' }}>
-                      <div className="fs-5 fw-bold" style={{ color: contribData.outstanding > 0 ? '#dc2626' : '#16a34a' }}>
+                    <div className="text-center p-3 rounded" style={{ background: contribData.outstanding > 0 ? 'var(--mop-danger-bg)' : 'var(--mop-success-bg)' }}>
+                      <div className="fs-5 fw-bold" style={{ color: contribData.outstanding > 0 ? 'var(--mop-danger)' : 'var(--mop-success)' }}>
                         RWF {(contribData.outstanding || 0).toLocaleString()}
                       </div>
                       <small className="text-muted">Outstanding</small>
@@ -187,8 +199,8 @@ export default function MemberDetail() {
                           <tr key={idx}>
                             <td>{monthNames[c.contribution_month]} {c.contribution_year}</td>
                             <td>{Number(c.required_amount).toLocaleString()} RWF</td>
-                            <td style={{ color: '#16a34a', fontWeight: 600 }}>{Number(c.total_paid).toLocaleString()} RWF</td>
-                            <td style={{ color: c.balance > 0 ? '#dc2626' : '#6b7280' }}>{Number(c.balance).toLocaleString()} RWF</td>
+                            <td style={{ color: 'var(--mop-success)', fontWeight: 600 }}>{Number(c.total_paid).toLocaleString()} RWF</td>
+                            <td style={{ color: c.balance > 0 ? 'var(--mop-danger)' : '#6b7280' }}>{Number(c.balance).toLocaleString()} RWF</td>
                             <td>{statusBadge(c.status)}</td>
                           </tr>
                         ))}
@@ -218,7 +230,10 @@ export default function MemberDetail() {
                   <tbody>
                     {guardians.map((g, idx) => (
                       <tr key={idx}>
-                        <td className="fw-semibold">{g.full_name || g.guardian_name || g.name || 'N/A'}</td>
+                        <td className="fw-semibold">
+                          {g.full_name || g.guardian_name || g.name || 'N/A'}
+                          {g.is_emergency ? <Badge bg="danger" className="ms-2">Emergency contact</Badge> : null}
+                        </td>
                         <td>{g.relationship || g.relation || '-'}</td>
                         <td>{g.phone || '-'}</td>
                         <td>{g.email || '-'}</td>

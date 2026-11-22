@@ -4,6 +4,7 @@ import { Table, Badge, Row, Col, Card, Button, Modal, Form } from 'react-bootstr
 import { FiArrowLeft, FiDollarSign, FiCheckCircle, FiXCircle, FiAlertTriangle, FiUser, FiCalendar } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import api from '../../services/api'
+import { today } from '../../utils/date'
 
 const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
@@ -17,7 +18,7 @@ export default function MemberContributions() {
   const [payYear, setPayYear] = useState('')
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState('Cash')
-  const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0])
+  const [payDate, setPayDate] = useState(today())
   const [payRef, setPayRef] = useState('')
   const [payNotes, setPayNotes] = useState('')
   const [selectedMonths, setSelectedMonths] = useState([])
@@ -66,7 +67,7 @@ export default function MemberContributions() {
   const openPayForMonth = (h) => {
     setPayMonth(h.month); setPayYear(h.year)
     setPayAmount(String(h.required_amount - h.total_paid)); setPayMethod('Cash')
-    setPayDate(new Date().toISOString().split('T')[0]); setPayRef(''); setPayNotes('')
+    setPayDate(today()); setPayRef(''); setPayNotes('')
     setShowPayModal(true)
   }
 
@@ -112,12 +113,12 @@ export default function MemberContributions() {
             </Col>
             <Col md={6}>
               <Row className="g-2">
-                <Col xs={4} sm={2}><div className="text-center p-2 rounded" style={{ background: '#F0FDF4' }}><div className="fs-5 fw-bold" style={{ color: '#16a34a' }}>{paid_months}</div><small className="text-muted">Paid</small></div></Col>
-                <Col xs={4} sm={2}><div className="text-center p-2 rounded" style={{ background: '#FEF2F2' }}><div className="fs-5 fw-bold" style={{ color: '#dc2626' }}>{unpaid_months}</div><small className="text-muted">Unpaid</small></div></Col>
-                <Col xs={4} sm={2}><div className="text-center p-2 rounded" style={{ background: '#FEF9C3' }}><div className="fs-5 fw-bold" style={{ color: '#f59e0b' }}>{partial_months}</div><small className="text-muted">Partial</small></div></Col>
-                <Col xs={4} sm={2}><div className="text-center p-2 rounded" style={{ background: '#F0FDF4' }}><div className="fs-5 fw-bold" style={{ color: '#16a34a' }}>{rate}%</div><small className="text-muted">Rate</small></div></Col>
-                <Col xs={4} sm={2}><div className="text-center p-2 rounded" style={{ background: '#F3E8FF' }}><div className="fs-5 fw-bold" style={{ color: '#16a34a' }}>{total_paid.toLocaleString()}</div><small className="text-muted">Total Paid</small></div></Col>
-                <Col xs={4} sm={2}><div className="text-center p-2 rounded" style={{ background: outstanding > 0 ? '#FEF2F2' : '#F0FDF4' }}><div className="fs-5 fw-bold" style={{ color: outstanding > 0 ? '#dc2626' : '#16a34a' }}>{outstanding.toLocaleString()}</div><small className="text-muted">Outstanding</small></div></Col>
+                <Col xs={4} sm={2}><div className="text-center p-2 rounded" style={{ background: 'var(--mop-success-bg)' }}><div className="fs-5 fw-bold" style={{ color: 'var(--mop-success)' }}>{paid_months}</div><small className="text-muted">Paid</small></div></Col>
+                <Col xs={4} sm={2}><div className="text-center p-2 rounded" style={{ background: 'var(--mop-danger-bg)' }}><div className="fs-5 fw-bold" style={{ color: 'var(--mop-danger)' }}>{unpaid_months}</div><small className="text-muted">Unpaid</small></div></Col>
+                <Col xs={4} sm={2}><div className="text-center p-2 rounded" style={{ background: '#FEF9C3' }}><div className="fs-5 fw-bold" style={{ color: 'var(--mop-warning)' }}>{partial_months}</div><small className="text-muted">Partial</small></div></Col>
+                <Col xs={4} sm={2}><div className="text-center p-2 rounded" style={{ background: 'var(--mop-success-bg)' }}><div className="fs-5 fw-bold" style={{ color: 'var(--mop-success)' }}>{rate}%</div><small className="text-muted">Rate</small></div></Col>
+                <Col xs={4} sm={2}><div className="text-center p-2 rounded" style={{ background: '#F3E8FF' }}><div className="fs-5 fw-bold" style={{ color: 'var(--mop-success)' }}>{total_paid.toLocaleString()}</div><small className="text-muted">Total Paid</small></div></Col>
+                <Col xs={4} sm={2}><div className="text-center p-2 rounded" style={{ background: outstanding > 0 ? 'var(--mop-danger-bg)' : 'var(--mop-success-bg)' }}><div className="fs-5 fw-bold" style={{ color: outstanding > 0 ? 'var(--mop-danger)' : 'var(--mop-success)' }}>{outstanding.toLocaleString()}</div><small className="text-muted">Outstanding</small></div></Col>
               </Row>
             </Col>
           </Row>
@@ -125,9 +126,9 @@ export default function MemberContributions() {
       </Card>
 
       {missed && missed.length > 0 && (
-        <Card className="mb-4" style={{ border: '1px solid #FECACA', background: '#FEF2F2' }}>
+        <Card className="mb-4" style={{ border: '1px solid #FECACA', background: 'var(--mop-danger-bg)' }}>
           <Card.Body className="py-3">
-            <h6 className="mb-2" style={{ color: '#dc2626' }}><FiAlertTriangle className="me-1" /> Missed Contributions</h6>
+            <h6 className="mb-2" style={{ color: 'var(--mop-danger)' }}><FiAlertTriangle className="me-1" /> Missed Contributions</h6>
             <div className="d-flex flex-wrap gap-2">
               {missed.map((m, i) => (
                 <Badge key={i} bg="danger" className="fw-normal px-3 py-2">
@@ -165,11 +166,11 @@ export default function MemberContributions() {
             </thead>
             <tbody>
               {history.map((h, idx) => (
-                <tr key={idx} style={h.status === 'Unpaid' ? { background: '#FEF2F2' } : h.status === 'Partial' ? { background: '#FFFBEB' } : {}}>
+                <tr key={idx} style={h.status === 'Unpaid' ? { background: 'var(--mop-danger-bg)' } : h.status === 'Partial' ? { background: 'var(--mop-warning-bg)' } : {}}>
                   <td className="fw-semibold">{monthNames[h.month]} {h.year}</td>
                   <td>{h.required_amount.toLocaleString()} RWF</td>
-                  <td className="fw-semibold" style={{ color: h.total_paid > 0 ? '#16a34a' : '#6b7280' }}>{h.total_paid.toLocaleString()} RWF</td>
-                  <td style={{ color: h.balance > 0 ? '#dc2626' : '#6b7280' }}>{h.balance.toLocaleString()} RWF</td>
+                  <td className="fw-semibold" style={{ color: h.total_paid > 0 ? 'var(--mop-success)' : '#6b7280' }}>{h.total_paid.toLocaleString()} RWF</td>
+                  <td style={{ color: h.balance > 0 ? 'var(--mop-danger)' : '#6b7280' }}>{h.balance.toLocaleString()} RWF</td>
                   <td>{statusBadge(h.status)}</td>
                   <td>{h.payment_date || <span className="text-muted">—</span>}</td>
                   <td>

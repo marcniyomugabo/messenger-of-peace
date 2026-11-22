@@ -3,8 +3,13 @@ import { Table, Button, Modal, Form, Badge, Row, Col, Tab, Tabs } from 'react-bo
 import { FiPlus, FiEdit2, FiTrash2, FiImage, FiCamera, FiUpload, FiX } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import api from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
+import { LEADERS } from '../../config/roles'
 
 export default function GalleryManagement() {
+  // Media may delete single photos; deleting a whole album is for super admin and chief (as on the server).
+  const { hasRole } = useAuth()
+  const canDeleteAlbum = hasRole(...LEADERS)
   const [albums, setAlbums] = useState([])
   const [images, setImages] = useState([])
   const [loading, setLoading] = useState(true)
@@ -210,8 +215,8 @@ export default function GalleryManagement() {
           </div>
         </Col>
         <Col md={4}>
-          <div className="kpi-card" style={{ borderLeftColor: '#16A34A' }}>
-            <div className="kpi-value" style={{ color: '#16A34A' }}>{publishedAlbums}</div>
+          <div className="kpi-card" style={{ borderLeftColor: 'var(--mop-success)' }}>
+            <div className="kpi-value" style={{ color: 'var(--mop-success)' }}>{publishedAlbums}</div>
             <div className="kpi-label">Published Albums</div>
           </div>
         </Col>
@@ -254,7 +259,9 @@ export default function GalleryManagement() {
                             setActiveTab('images')
                           }} title="View Images"><FiImage /></Button>
                           <Button variant="outline-secondary" size="sm" onClick={() => handleEditAlbum(album)} title="Edit"><FiEdit2 /></Button>
-                          <Button variant="outline-danger" size="sm" onClick={() => handleDeleteAlbum(album.id)} title="Delete"><FiTrash2 /></Button>
+                          {canDeleteAlbum && (
+                            <Button variant="outline-danger" size="sm" onClick={() => handleDeleteAlbum(album.id)} title="Delete"><FiTrash2 /></Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -398,7 +405,7 @@ export default function GalleryManagement() {
                   <div onClick={() => fileInputRef.current?.click()} style={{ cursor: 'pointer', padding: '20px 0' }}>
                     <FiUpload size={40} style={{ color: '#9CA3AF' }} />
                     <p className="mt-2 mb-1 fw-semibold" style={{ color: '#374151' }}>Click to select an image</p>
-                    <small className="text-muted">JPG, PNG, GIF, WebP (max 5MB)</small>
+                    <small className="text-muted">JPG, PNG, GIF, WebP (max 25MB)</small>
                   </div>
                 )}
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} style={{ display: 'none' }} />

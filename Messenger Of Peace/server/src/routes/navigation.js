@@ -4,6 +4,15 @@ const { body, param, validationResult } = require('express-validator');
 const pool = require('../config/db');
 const { authenticate, authorize } = require('../middleware/auth');
 
+// A menu link is a page of this site ("/about") or a full web address. Anything else
+// (for example "javascript:...") is refused, because it could run code in a visitor's browser.
+const isSafeMenuUrl = (url) => /^\/(?!\/)\S*$/.test(url) || /^https?:\/\/\S+$/i.test(url);
+const urlRule = (optional) => {
+  const rule = body('url').trim();
+  return (optional ? rule.optional() : rule.notEmpty().withMessage('URL is required'))
+    .custom(isSafeMenuUrl).withMessage('URL must start with "/" (a page of this site) or with http:// or https://');
+};
+
 // GET / - Public: active items
 router.get('/', async (req, res) => {
   try {
@@ -20,7 +29,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /admin - All items (authenticated)
-router.get('/admin', authenticate, async (req, res) => {
+router.get('/admin', authenticate, authorize('super_admin', 'chief', 'media'), async (req, res) => {
   try {
     const [items] = await pool.query(
       'SELECT * FROM navigation_items ORDER BY sort_order ASC'
@@ -37,7 +46,7 @@ router.post(
   '/',
   authenticate,
   authorize('super_admin', 'chief'),
-  [body('label').notEmpty().withMessage('Label is required'), body('url').notEmpty().withMessage('URL is required')],
+  [body('label').trim().notEmpty().withMessage('Label is required'), urlRule(false)],
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -69,9 +78,12 @@ router.put(
   '/:id',
   authenticate,
   authorize('super_admin', 'chief'),
-  [param('id').isInt()],
+  [param('id').isInt(), body('label').optional().trim().notEmpty().withMessage('Label is required'), urlRule(true)],
   async (req, res) => {
     try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ success: false, message: errors.array()[0].msg });
+
       const [existing] = await pool.query('SELECT id FROM navigation_items WHERE id = ?', [req.params.id]);
       if (existing.length === 0) return res.status(404).json({ success: false, message: 'Navigation item not found' });
 
@@ -95,6 +107,7 @@ router.put(
       const [updated] = await pool.query('SELECT * FROM navigation_items WHERE id = ?', [req.params.id]);
       res.json({ success: true, message: 'Navigation item updated', data: updated[0] });
     } catch (error) {
+      console.error('Update navigation item error:', error);
       res.status(500).json({ success: false, message: 'Server error' });
     }
   }

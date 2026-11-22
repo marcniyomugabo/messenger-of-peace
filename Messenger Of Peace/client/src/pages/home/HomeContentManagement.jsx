@@ -20,7 +20,7 @@ export default function HomeContentManagement() {
   const [showSectionModal, setShowSectionModal] = useState(false)
   const [editSection, setEditSection] = useState(null)
   const [sectionForm, setSectionForm] = useState({
-    title: '', content: '', section_type: 'hero', image: '',
+    title: '', content: '', section_type: 'stats', image: '',
     sort_order: 0, is_active: 1
   })
 
@@ -71,8 +71,8 @@ export default function HomeContentManagement() {
       setShowSlideModal(false)
       resetSlideForm()
       fetchSlides()
-    } catch {
-      toast.error('Operation failed')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Operation failed')
     }
   }
 
@@ -89,8 +89,8 @@ export default function HomeContentManagement() {
       setShowSectionModal(false)
       resetSectionForm()
       fetchSections()
-    } catch {
-      toast.error('Operation failed')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Operation failed')
     }
   }
 
@@ -109,7 +109,7 @@ export default function HomeContentManagement() {
     setEditSection(section)
     setSectionForm({
       title: section.title || '', content: section.content || '',
-      section_type: section.section_type || 'hero', image: section.image || '',
+      section_type: section.section_type || 'stats', image: section.image || '',
       sort_order: section.sort_order || 0, is_active: section.is_active !== undefined ? section.is_active : 1
     })
     setShowSectionModal(true)
@@ -121,8 +121,8 @@ export default function HomeContentManagement() {
       await api.delete(`/homepage/slides/${id}`)
       toast.success('Slide deleted')
       fetchSlides()
-    } catch {
-      toast.error('Failed to delete')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete')
     }
   }
 
@@ -132,8 +132,8 @@ export default function HomeContentManagement() {
       await api.delete(`/homepage/sections/${id}`)
       toast.success('Section deleted')
       fetchSections()
-    } catch {
-      toast.error('Failed to delete')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete')
     }
   }
 
@@ -142,8 +142,8 @@ export default function HomeContentManagement() {
       await api.put(`/homepage/slides/${slide.id}`, { is_active: slide.is_active ? 0 : 1 })
       toast.success(`Slide ${slide.is_active ? 'deactivated' : 'activated'}`)
       fetchSlides()
-    } catch {
-      toast.error('Failed to update')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update')
     }
   }
 
@@ -152,8 +152,8 @@ export default function HomeContentManagement() {
       await api.put(`/homepage/sections/${section.id}`, { is_active: section.is_active ? 0 : 1 })
       toast.success(`Section ${section.is_active ? 'deactivated' : 'activated'}`)
       fetchSections()
-    } catch {
-      toast.error('Failed to update')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update')
     }
   }
 
@@ -168,7 +168,7 @@ export default function HomeContentManagement() {
   const resetSectionForm = () => {
     setEditSection(null)
     setSectionForm({
-      title: '', content: '', section_type: 'hero', image: '',
+      title: '', content: '', section_type: 'stats', image: '',
       sort_order: 0, is_active: 1
     })
   }
@@ -176,10 +176,10 @@ export default function HomeContentManagement() {
   const activeSlides = slides.filter(s => s.is_active).length
   const activeSections = sections.filter(s => s.is_active).length
 
-  const sectionTypeBadge = (type) => {
-    const variants = { hero: 'primary', features: 'info', stats: 'success', cta: 'warning', custom: 'secondary' }
-    return <Badge bg={variants[type] || 'secondary'}>{type || 'custom'}</Badge>
-  }
+  // The Home page shows one kind of section: the numbers block ("stats").
+  const sectionTypeBadge = (type) => (type === 'stats'
+    ? <Badge bg="success">Numbers</Badge>
+    : <Badge bg="secondary" title="The Home page does not show this kind of section">{type || 'custom'}: not shown</Badge>)
 
   return (
     <div>
@@ -197,8 +197,8 @@ export default function HomeContentManagement() {
               </div>
             </Col>
             <Col md={6}>
-              <div className="kpi-card" style={{ borderLeftColor: '#16A34A' }}>
-                <div className="kpi-value" style={{ color: '#16A34A' }}>{activeSlides}</div>
+              <div className="kpi-card" style={{ borderLeftColor: 'var(--mop-success)' }}>
+                <div className="kpi-value" style={{ color: 'var(--mop-success)' }}>{activeSlides}</div>
                 <div className="kpi-label">Active Slides</div>
               </div>
             </Col>
@@ -290,7 +290,8 @@ export default function HomeContentManagement() {
                   <Col md={12}>
                     <Form.Group className="mb-3">
                       <Form.Label>Background Image URL</Form.Label>
-                      <Form.Control name="background_image" value={slideForm.background_image} onChange={handleSlideChange} placeholder="https://..." />
+                      <Form.Control name="background_image" value={slideForm.background_image} onChange={handleSlideChange} placeholder="/images/bg2.jpeg" />
+                      <Form.Text className="text-muted">A picture of this website (for example /images/bg2.jpeg) or a full web address.</Form.Text>
                     </Form.Group>
                   </Col>
                   <Col md={6}>
@@ -303,6 +304,7 @@ export default function HomeContentManagement() {
                     <Form.Group className="mb-3">
                       <Form.Label>Button Link</Form.Label>
                       <Form.Control name="button_link" value={slideForm.button_link} onChange={handleSlideChange} placeholder="/about" />
+                      <Form.Text className="text-muted">A page of this website starts with "/". Leave the text or link empty to show no button.</Form.Text>
                     </Form.Group>
                   </Col>
                   <Col md={6}>
@@ -335,8 +337,8 @@ export default function HomeContentManagement() {
               </div>
             </Col>
             <Col md={6}>
-              <div className="kpi-card" style={{ borderLeftColor: '#16A34A' }}>
-                <div className="kpi-value" style={{ color: '#16A34A' }}>{activeSections}</div>
+              <div className="kpi-card" style={{ borderLeftColor: 'var(--mop-success)' }}>
+                <div className="kpi-value" style={{ color: 'var(--mop-success)' }}>{activeSections}</div>
                 <div className="kpi-label">Active Sections</div>
               </div>
             </Col>
@@ -410,18 +412,19 @@ export default function HomeContentManagement() {
                   <Col md={12}>
                     <Form.Group className="mb-3">
                       <Form.Label>Content</Form.Label>
-                      <Form.Control as="textarea" rows={4} name="content" value={sectionForm.content} onChange={handleSectionChange} />
+                      <Form.Control as="textarea" rows={6} name="content" value={sectionForm.content} onChange={handleSectionChange} placeholder={'105 | Active Members'} />
+                      <Form.Text className="text-muted">
+                        One number per line, written as "value | label" (for example 50+ | Activities Per Year).
+                        The "Scout Units" number is always the real number of units.
+                      </Form.Text>
                     </Form.Group>
                   </Col>
                   <Col md={6}>
                     <Form.Group className="mb-3">
                       <Form.Label>Section Type</Form.Label>
                       <Form.Select name="section_type" value={sectionForm.section_type} onChange={handleSectionChange}>
-                        <option value="hero">Hero</option>
-                        <option value="features">Features</option>
-                        <option value="stats">Stats</option>
-                        <option value="cta">Call to Action</option>
-                        <option value="custom">Custom</option>
+                        <option value="stats">Numbers (Home page)</option>
+                        {sectionForm.section_type !== 'stats' && <option value={sectionForm.section_type}>{sectionForm.section_type} (not shown)</option>}
                       </Form.Select>
                     </Form.Group>
                   </Col>
@@ -429,12 +432,6 @@ export default function HomeContentManagement() {
                     <Form.Group className="mb-3">
                       <Form.Label>Sort Order</Form.Label>
                       <Form.Control type="number" name="sort_order" value={sectionForm.sort_order} onChange={handleSectionChange} />
-                    </Form.Group>
-                  </Col>
-                  <Col md={12}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Image URL</Form.Label>
-                      <Form.Control name="image" value={sectionForm.image} onChange={handleSectionChange} placeholder="https://..." />
                     </Form.Group>
                   </Col>
                   <Col md={12}>

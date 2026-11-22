@@ -25,7 +25,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /admin - All documents (authenticated)
-router.get('/admin', authenticate, async (req, res) => {
+router.get('/admin', authenticate, authorize('super_admin', 'chief', 'media'), async (req, res) => {
   try {
     const { category, search, page = 1, limit = 100 } = req.query;
     const offset = (page - 1) * limit;
@@ -44,7 +44,7 @@ router.get('/admin', authenticate, async (req, res) => {
 });
 
 // POST / - Create document (authenticated)
-router.post('/', authenticate, [body('title').notEmpty().withMessage('Title is required')], async (req, res) => {
+router.post('/', authenticate, authorize('super_admin', 'chief', 'media'), [body('title').notEmpty().withMessage('Title is required')], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ success: false, message: errors.array()[0].msg });
@@ -62,7 +62,7 @@ router.post('/', authenticate, [body('title').notEmpty().withMessage('Title is r
 });
 
 // PUT /:id - Update document
-router.put('/:id', authenticate, [param('id').isInt()], async (req, res) => {
+router.put('/:id', authenticate, authorize('super_admin', 'chief', 'media'), [param('id').isInt()], async (req, res) => {
   try {
     const [existing] = await pool.query('SELECT id FROM information_documents WHERE id = ?', [req.params.id]);
     if (existing.length === 0) return res.status(404).json({ success: false, message: 'Not found' });
@@ -84,7 +84,7 @@ router.put('/:id', authenticate, [param('id').isInt()], async (req, res) => {
 });
 
 // DELETE /:id
-router.delete('/:id', authenticate, [param('id').isInt()], async (req, res) => {
+router.delete('/:id', authenticate, authorize('super_admin', 'chief', 'media'), [param('id').isInt()], async (req, res) => {
   try {
     const [existing] = await pool.query('SELECT id FROM information_documents WHERE id = ?', [req.params.id]);
     if (existing.length === 0) return res.status(404).json({ success: false, message: 'Not found' });

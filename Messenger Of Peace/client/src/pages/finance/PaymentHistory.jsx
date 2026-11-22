@@ -3,10 +3,15 @@ import { Table, Badge, Row, Col, Form, InputGroup, Button, Modal } from 'react-b
 import { FiSearch, FiDollarSign, FiEdit2, FiX } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import api from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
+import { LEADERS } from '../../config/roles'
 
 const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 export default function PaymentHistory() {
+  // The treasurer can correct a payment; cancelling one is for super admin and chief (as on the server).
+  const { hasRole } = useAuth()
+  const canCancel = hasRole(...LEADERS)
   const now = new Date()
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -166,9 +171,11 @@ export default function PaymentHistory() {
                           <Button variant="outline-secondary" size="sm" onClick={() => { setEditPayment(p); setEditForm({ amount: p.amount, payment_method: p.payment_method || 'Cash', payment_date: p.payment_date || '', reference_number: p.reference_number || '', notes: p.notes || '' }); setShowEditModal(true); }}>
                             <FiEdit2 />
                           </Button>
-                          <Button variant="outline-danger" size="sm" onClick={() => handleCancel(p.id)}>
-                            <FiX />
-                          </Button>
+                          {canCancel && (
+                            <Button variant="outline-danger" size="sm" onClick={() => handleCancel(p.id)} title="Cancel this payment">
+                              <FiX />
+                            </Button>
+                          )}
                         </>
                       )}
                     </div>

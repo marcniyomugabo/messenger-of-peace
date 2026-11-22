@@ -4,6 +4,10 @@ import { FiShield, FiPlus, FiEdit3, FiTrash2, FiSearch, FiCheckCircle } from 're
 import { toast } from 'react-toastify'
 import api from '../../services/api'
 
+// Built-in roles are checked by name in the code, so the server refuses to rename or delete them.
+const BUILT_IN_ROLES = ['super_admin', 'chief', 'deputy_chief', 'secretary', 'treasurer',
+  'discipline_officer', 'unit_leader', 'media', 'member', 'applicant']
+
 const PERMISSION_MODULES = [
   'members', 'leadership', 'units', 'attendance', 'contributions',
   'finance', 'events', 'portfolio', 'gallery', 'announcements',
@@ -62,7 +66,11 @@ export default function RoleManagement() {
   const fetchAllPermissions = async () => {
     try {
       const res = await api.get('/roles/permissions/all')
-      setAllPermissions(res.data.data || [])
+      // The server groups permissions by module ({ finance: [...], ... }); the page works
+      // with one list, and uses the permission name (e.g. 'finance.create') as its key.
+      const data = res.data.data || {}
+      const list = Array.isArray(data) ? data : Object.values(data).flat()
+      setAllPermissions(list.map(p => ({ ...p, key: p.key || p.name })))
     } catch {}
   }
 
@@ -80,7 +88,8 @@ export default function RoleManagement() {
       setEditingRole(data)
       setForm({ name: data.name, description: data.description || '' })
       const permMap = {}
-      ;(data.permission_ids || data.permissions || []).forEach(id => { permMap[id] = true })
+      // The role's permissions come as full objects; tick their ids.
+      ;(data.permission_ids || (data.permissions || []).map(p => p.id)).forEach(id => { permMap[id] = true })
       setSelectedPerms(permMap)
       setShowModal(true)
     } catch {
@@ -237,11 +246,11 @@ export default function RoleManagement() {
                           <FiEdit3 style={{ color: '#7C3AED' }} />
                         </Button>
                         <Button variant="link" size="sm" onClick={() => {
-                          if (role.name === 'super_admin') return toast.warning('Cannot delete super admin role')
+                          if (BUILT_IN_ROLES.includes(role.name)) return toast.warning('Built-in roles cannot be deleted')
                           setDeletingRole(role)
                           setShowDeleteModal(true)
                         }} title="Delete Role">
-                          <FiTrash2 style={{ color: role.name === 'super_admin' ? '#D1D5DB' : '#581C87' }} />
+                          <FiTrash2 style={{ color: BUILT_IN_ROLES.includes(role.name) ? '#D1D5DB' : '#581C87' }} />
                         </Button>
                       </td>
                     </tr>
@@ -268,8 +277,11 @@ export default function RoleManagement() {
                   <Form.Label className="fw-semibold">Role Name *</Form.Label>
                   <Form.Control required value={form.name}
                     onChange={e => setForm({ ...form, name: e.target.value })}
-                    placeholder="e.g. content_manager" disabled={editingRole?.name === 'super_admin'}
+                    placeholder="e.g. content_manager" disabled={BUILT_IN_ROLES.includes(editingRole?.name)}
                     style={{ border: '1px solid #DDD6FE' }} />
+                  {BUILT_IN_ROLES.includes(editingRole?.name) && (
+                    <Form.Text muted>Built-in role: the name is used by the system and can't be changed.</Form.Text>
+                  )}
                 </Form.Group>
               </Col>
               <Col md={7}>
@@ -339,7 +351,7 @@ export default function RoleManagement() {
 
       {/* Delete Confirmation Modal */}
       <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} centered>
-        <Modal.Header closeButton style={{ background: '#FEF2F2' }}>
+        <Modal.Header closeButton style={{ background: 'var(--mop-danger-bg)' }}>
           <Modal.Title style={{ color: '#581C87' }}>
             <FiTrash2 className="me-2" />Delete Role
           </Modal.Title>

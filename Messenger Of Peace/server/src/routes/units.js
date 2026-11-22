@@ -4,17 +4,42 @@ const { body, param, validationResult } = require('express-validator');
 const pool = require('../config/db');
 const { authenticate, authorize } = require('../middleware/auth');
 
-// GET / - Public list
+// A member's unit is members.unit_id, so units are counted from there (active members only).
+const UNIT_LIST = `
+  SELECT u.*, COUNT(m.id) AS member_count
+  FROM units u
+  LEFT JOIN members m ON m.unit_id = u.id AND m.status = 'Active'
+  %WHERE%
+  GROUP BY u.id
+  ORDER BY u.display_order ASC, u.name ASC`;
+
+const EDITABLE = ['name', 'description', 'focus_area', 'icon', 'min_age', 'max_age', 'color', 'activities', 'leader_id', 'is_active', 'display_order'];
+
+const toSlug = name => String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+// Empty form fields become NULL; ages and order become numbers.
+function clean(field, value) {
+  if (value === '' || value === undefined) return null;
+  if (['min_age', 'max_age', 'display_order', 'leader_id'].includes(field)) return Number(value);
+  if (field === 'is_active') return value ? 1 : 0;
+  return value;
+}
+
+const unitRules = [
+  body('name').optional().trim().notEmpty().withMessage('Unit name is required'),
+  body(['min_age', 'max_age']).optional({ values: 'falsy' }).isInt({ min: 0, max: 120 }).withMessage('Ages must be whole numbers'),
+  body('display_order').optional({ values: 'falsy' }).isInt().withMessage('Order must be a whole number'),
+  body('color').optional({ values: 'falsy' }).matches(/^#[0-9a-fA-F]{6}$/).withMessage('Colour must look like #6B21A8'),
+  body().custom(b => {
+    if (b.min_age && b.max_age && Number(b.min_age) > Number(b.max_age)) throw new Error('Youngest age must not be above the oldest age');
+    return true;
+  }),
+];
+
+// GET / - Public list of active units (public Units page, Join Us form, member pages)
 router.get('/', async (req, res) => {
   try {
-    const [units] = await pool.query(
-      `SELECT u.*, COUNT(um.member_id) as member_count
-       FROM units u
-       LEFT JOIN unit_members um ON um.unit_id = u.id AND um.is_active = 1
-       WHERE u.is_active = 1
-       GROUP BY u.id
-       ORDER BY u.display_order ASC, u.name ASC`
-    );
+    const [units] = await pool.query(UNIT_LIST.replace('%WHERE%', 'WHERE u.is_active = 1'));
     res.json({ success: true, data: units });
   } catch (error) {
     console.error('Units list error:', error);
@@ -22,33 +47,35 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /:id
-router.get('/:id', [param('id').isInt()], async (req, res) => {
+// GET /admin - All units, including deactivated ones, for the Units page in the dashboard
+router.get('/admin', authenticate, authorize('super_admin', 'chief'), async (req, res) => {
   try {
-    const [units] = await pool.query(
-      `SELECT u.*, COUNT(um.member_id) as member_count
-       FROM units u
-       LEFT JOIN unit_members um ON um.unit_id = u.id AND um.is_active = 1
-       WHERE u.id = ?
-       GROUP BY u.id`,
-      [req.params.id]
-    );
+    const [units] = await pool.query(UNIT_LIST.replace('%WHERE%', ''));
+    res.json({ success: true, data: units });
+  } catch (error) {
+    console.error('Units admin list error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
 
+// GET /:id - One unit with its members (staff only: it lists children's names)
+router.get('/:id', authenticate, authorize('super_admin', 'chief', 'secretary', 'unit_leader'), [param('id').isInt()], async (req, res) => {
+  try {
+    const [units] = await pool.query(UNIT_LIST.replace('%WHERE%', 'WHERE u.id = ?'), [req.params.id]);
     if (units.length === 0) {
       return res.status(404).json({ success: false, message: 'Unit not found' });
     }
 
     const [members] = await pool.query(
-      `SELECT m.id, m.member_code, m.first_name, m.last_name, m.photo, um.role
-       FROM members m
-       JOIN unit_members um ON um.member_id = m.id
-       WHERE um.unit_id = ? AND um.is_active = 1 AND m.status = 'Active'
-       ORDER BY m.first_name ASC`,
+      `SELECT id, member_code, first_name, last_name, photo, role_in_group
+       FROM members WHERE unit_id = ? AND status = 'Active'
+       ORDER BY first_name ASC`,
       [req.params.id]
     );
 
     res.json({ success: true, data: { ...units[0], members } });
   } catch (error) {
+    console.error('Unit detail error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -58,7 +85,7 @@ router.post(
   '/',
   authenticate,
   authorize('super_admin', 'chief'),
-  [body('name').notEmpty().withMessage('Unit name is required')],
+  [body('name').trim().notEmpty().withMessage('Unit name is required'), ...unitRules],
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -66,17 +93,17 @@ router.post(
         return res.status(400).json({ success: false, message: errors.array()[0].msg });
       }
 
-      const { name, description, focus_area, icon, display_order } = req.body;
-      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-
-      const [existing] = await pool.query('SELECT id FROM units WHERE name = ?', [name]);
+      const name = req.body.name;
+      const slug = toSlug(name);
+      const [existing] = await pool.query('SELECT id FROM units WHERE name = ? OR slug = ?', [name, slug]);
       if (existing.length > 0) {
         return res.status(409).json({ success: false, message: 'Unit name already exists' });
       }
 
+      const fields = EDITABLE.filter(f => f !== 'name' && req.body[f] !== undefined);
       const [result] = await pool.query(
-        'INSERT INTO units (name, slug, description, focus_area, icon, display_order) VALUES (?, ?, ?, ?, ?, ?)',
-        [name, slug, description || null, focus_area || null, icon || null, display_order || 0]
+        `INSERT INTO units (name, slug${fields.map(f => ', ' + f).join('')}) VALUES (?, ?${', ?'.repeat(fields.length)})`,
+        [name, slug, ...fields.map(f => clean(f, req.body[f]))]
       );
 
       const [newUnit] = await pool.query('SELECT * FROM units WHERE id = ?', [result.insertId]);
@@ -89,11 +116,13 @@ router.post(
 );
 
 // PUT /:id
+// The slug is kept when a unit is renamed: applications store it, so changing it would
+// break the link between those applications and their unit.
 router.put(
   '/:id',
   authenticate,
   authorize('super_admin', 'chief'),
-  [param('id').isInt().withMessage('Invalid unit ID')],
+  [param('id').isInt().withMessage('Invalid unit ID'), ...unitRules],
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -106,34 +135,33 @@ router.put(
         return res.status(404).json({ success: false, message: 'Unit not found' });
       }
 
-      const { name, description, focus_area, icon, leader_id, is_active, display_order } = req.body;
-      const fields = [];
-      const params = [];
+      if (req.body.name !== undefined) {
+        const [taken] = await pool.query('SELECT id FROM units WHERE name = ? AND id <> ?', [req.body.name, req.params.id]);
+        if (taken.length > 0) {
+          return res.status(409).json({ success: false, message: 'Unit name already exists' });
+        }
+      }
 
-      if (name !== undefined) { fields.push('name = ?'); params.push(name); }
-      if (description !== undefined) { fields.push('description = ?'); params.push(description); }
-      if (focus_area !== undefined) { fields.push('focus_area = ?'); params.push(focus_area); }
-      if (icon !== undefined) { fields.push('icon = ?'); params.push(icon); }
-      if (leader_id !== undefined) { fields.push('leader_id = ?'); params.push(leader_id); }
-      if (is_active !== undefined) { fields.push('is_active = ?'); params.push(is_active); }
-      if (display_order !== undefined) { fields.push('display_order = ?'); params.push(display_order); }
-
+      const fields = EDITABLE.filter(f => req.body[f] !== undefined);
       if (fields.length === 0) {
         return res.status(400).json({ success: false, message: 'No fields to update' });
       }
 
-      params.push(req.params.id);
-      await pool.query(`UPDATE units SET ${fields.join(', ')} WHERE id = ?`, params);
+      await pool.query(
+        `UPDATE units SET ${fields.map(f => `${f} = ?`).join(', ')} WHERE id = ?`,
+        [...fields.map(f => clean(f, req.body[f])), req.params.id]
+      );
 
       const [updated] = await pool.query('SELECT * FROM units WHERE id = ?', [req.params.id]);
       res.json({ success: true, message: 'Unit updated', data: updated[0] });
     } catch (error) {
+      console.error('Update unit error:', error);
       res.status(500).json({ success: false, message: 'Server error' });
     }
   }
 );
 
-// DELETE /:id
+// DELETE /:id - Deactivates the unit: hidden from the website and Join Us; its members keep it
 router.delete(
   '/:id',
   authenticate,
@@ -149,6 +177,7 @@ router.delete(
       await pool.query('UPDATE units SET is_active = 0 WHERE id = ?', [req.params.id]);
       res.json({ success: true, message: 'Unit deactivated' });
     } catch (error) {
+      console.error('Deactivate unit error:', error);
       res.status(500).json({ success: false, message: 'Server error' });
     }
   }

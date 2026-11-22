@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { Form, Button } from 'react-bootstrap'
 import { useAuth } from '../../context/AuthContext'
 import { FiLogIn, FiMail, FiLock } from 'react-icons/fi'
@@ -20,7 +20,7 @@ export default function Login() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-logo">
-          <img src="/images/logo-transparent.png" alt="MOP Logo" className="auth-logo-img" />
+          <img src="/images/logo-badge.png" alt="MOP Logo" className="auth-logo-img" />
           <h4 style={{ color: '#6B21A8' }}>Messengers of Peace</h4>
           <p className="text-muted small">Scout Group Dashboard</p>
         </div>
@@ -40,9 +40,12 @@ export default function Login() {
           </Form.Group>
 
           <Form.Group className="mb-4">
-            <Form.Label>
-              <FiLock className="me-1" /> Password
-            </Form.Label>
+            <div className="d-flex justify-content-between align-items-baseline">
+              <Form.Label>
+                <FiLock className="me-1" /> Password
+              </Form.Label>
+              <Link to="/forgot-password" className="small">Forgot password?</Link>
+            </div>
             <Form.Control
               type="password"
               value={password}

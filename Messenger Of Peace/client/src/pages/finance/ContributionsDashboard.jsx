@@ -4,6 +4,7 @@ import { Table, Button, Modal, Form, Badge, Row, Col, InputGroup } from 'react-b
 import { FiDollarSign, FiSearch, FiEye, FiPlus, FiCalendar, FiUsers, FiCheckCircle, FiXCircle, FiAlertTriangle } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import api from '../../services/api'
+import { today } from '../../utils/date'
 
 const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
@@ -13,28 +14,27 @@ export default function ContributionsDashboard() {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
   const [summary, setSummary] = useState(null)
   const [contributions, setContributions] = useState([])
-  const [members, setMembers] = useState([])
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [loading, setLoading] = useState(true)
   const [showPayModal, setShowPayModal] = useState(false)
   const [selectedMember, setSelectedMember] = useState(null)
-  const [payForm, setPayForm] = useState({ amount: '', payment_method: 'Cash', payment_date: now.toISOString().split('T')[0], reference_number: '', notes: '' })
+  const [payForm, setPayForm] = useState({ amount: '', payment_method: 'Cash', payment_date: today(), reference_number: '', notes: '' })
   const [showMultiModal, setShowMultiModal] = useState(false)
   const [multiSelections, setMultiSelections] = useState([])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [sumRes, contribRes, membersRes] = await Promise.all([
+      // The contribution list already has each member's name, code and unit. (It used to also load
+      // the full member list, which the treasurer may not read: that made the whole page fail for them.)
+      const [sumRes, contribRes] = await Promise.all([
         api.get(`/contributions/summary?month=${selectedMonth}&year=${selectedYear}`),
         api.get(`/contributions?month=${selectedMonth}&year=${selectedYear}&limit=200`),
-        api.get('/members/admin?limit=500'),
       ])
       setSummary(sumRes.data.data)
       setContributions(contribRes.data.data?.contributions || [])
-      setMembers(membersRes.data.data?.members || [])
-    } catch (err) { console.error(err) }
+    } catch (err) { toast.error(err.response?.data?.message || 'Could not load contributions') }
     finally { setLoading(false) }
   }, [selectedMonth, selectedYear])
 
@@ -63,7 +63,7 @@ export default function ContributionsDashboard() {
   const openPayModal = (contrib) => {
     setSelectedMember(contrib)
     const remaining = (contrib.required_amount || 500) - (contrib.total_paid || 0)
-    setPayForm({ amount: remaining > 0 ? remaining : '', payment_method: 'Cash', payment_date: now.toISOString().split('T')[0], reference_number: '', notes: '' })
+    setPayForm({ amount: remaining > 0 ? remaining : '', payment_method: 'Cash', payment_date: today(), reference_number: '', notes: '' })
     setShowPayModal(true)
   }
 
@@ -153,26 +153,26 @@ export default function ContributionsDashboard() {
             </div>
           </Col>
           <Col lg={2} md={4} sm={6}>
-            <div className="kpi-card h-100" style={{ borderLeftColor: '#16a34a' }}>
-              <div className="kpi-value" style={{ color: '#16a34a' }}>{summary.paid}</div>
+            <div className="kpi-card h-100" style={{ borderLeftColor: 'var(--mop-success)' }}>
+              <div className="kpi-value" style={{ color: 'var(--mop-success)' }}>{summary.paid}</div>
               <div className="kpi-label">Paid</div>
             </div>
           </Col>
           <Col lg={2} md={4} sm={6}>
-            <div className="kpi-card h-100" style={{ borderLeftColor: '#f59e0b' }}>
-              <div className="kpi-value" style={{ color: '#f59e0b' }}>{summary.partial}</div>
+            <div className="kpi-card h-100" style={{ borderLeftColor: 'var(--mop-warning)' }}>
+              <div className="kpi-value" style={{ color: 'var(--mop-warning)' }}>{summary.partial}</div>
               <div className="kpi-label">Partial</div>
             </div>
           </Col>
           <Col lg={2} md={4} sm={6}>
-            <div className="kpi-card h-100" style={{ borderLeftColor: '#dc2626' }}>
-              <div className="kpi-value" style={{ color: '#dc2626' }}>{summary.unpaid}</div>
+            <div className="kpi-card h-100" style={{ borderLeftColor: 'var(--mop-danger)' }}>
+              <div className="kpi-value" style={{ color: 'var(--mop-danger)' }}>{summary.unpaid}</div>
               <div className="kpi-label">Unpaid</div>
             </div>
           </Col>
           <Col lg={2} md={4} sm={6}>
-            <div className="kpi-card h-100" style={{ borderLeftColor: '#16a34a' }}>
-              <div className="kpi-value" style={{ color: '#16a34a' }}>RWF {(summary.collected || 0).toLocaleString()}</div>
+            <div className="kpi-card h-100" style={{ borderLeftColor: 'var(--mop-success)' }}>
+              <div className="kpi-value" style={{ color: 'var(--mop-success)' }}>RWF {(summary.collected || 0).toLocaleString()}</div>
               <div className="kpi-label">Collected</div>
             </div>
           </Col>
@@ -216,8 +216,8 @@ export default function ContributionsDashboard() {
                   <td className="fw-semibold">{c.member_name}</td>
                   <td><Badge bg="primary">{c.unit_name || 'N/A'}</Badge></td>
                   <td>{Number(c.required_amount).toLocaleString()} RWF</td>
-                  <td className="fw-semibold" style={{ color: c.total_paid >= c.required_amount ? '#16a34a' : '#7C3AED' }}>{Number(c.total_paid).toLocaleString()} RWF</td>
-                  <td style={{ color: c.balance > 0 ? '#dc2626' : '#6b7280' }}>{Number(c.balance).toLocaleString()} RWF</td>
+                  <td className="fw-semibold" style={{ color: c.total_paid >= c.required_amount ? 'var(--mop-success)' : '#7C3AED' }}>{Number(c.total_paid).toLocaleString()} RWF</td>
+                  <td style={{ color: c.balance > 0 ? 'var(--mop-danger)' : '#6b7280' }}>{Number(c.balance).toLocaleString()} RWF</td>
                   <td>{statusBadge(c.status)}</td>
                   <td>
                     <div className="d-flex gap-1">

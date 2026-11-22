@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { Fragment, useState, useEffect, useCallback } from 'react'
 import { Table, Badge, Row, Col, Form, Button, InputGroup } from 'react-bootstrap'
 import { FiSearch, FiActivity, FiClock, FiUsers, FiGrid, FiChevronDown, FiChevronUp } from 'react-icons/fi'
 import { toast } from 'react-toastify'
@@ -112,7 +112,7 @@ export default function AuditLogsPage() {
       <Row className="g-3">
         {oldVal && (
           <Col md={6}>
-            <div className="p-3 rounded" style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}>
+            <div className="p-3 rounded" style={{ background: 'var(--mop-danger-bg)', border: '1px solid #FECACA' }}>
               <h6 className="text-danger mb-2 small fw-bold">Previous Value</h6>
               <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{typeof oldVal === 'string' ? oldVal : JSON.stringify(oldVal, null, 2)}</pre>
             </div>
@@ -120,7 +120,7 @@ export default function AuditLogsPage() {
         )}
         {newVal && (
           <Col md={6}>
-            <div className="p-3 rounded" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+            <div className="p-3 rounded" style={{ background: 'var(--mop-success-bg)', border: '1px solid #BBF7D0' }}>
               <h6 className="text-success mb-2 small fw-bold">New Value</h6>
               <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{typeof newVal === 'string' ? newVal : JSON.stringify(newVal, null, 2)}</pre>
             </div>
@@ -231,9 +231,8 @@ export default function AuditLogsPage() {
             </thead>
             <tbody>
               {logs.map((log) => (
-                <>
+                <Fragment key={log.id}>
                   <tr
-                    key={log.id}
                     onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}
                     style={{ cursor: 'pointer' }}
                   >
@@ -258,13 +257,13 @@ export default function AuditLogsPage() {
                     <td className="text-muted small">{log.ip_address || log.ip || '-'}</td>
                   </tr>
                   {expandedRow === log.id && (
-                    <tr key={`${log.id}-detail`}>
+                    <tr>
                       <td colSpan="8" className="p-3" style={{ background: '#F9FAFB' }}>
                         {renderDetail(log)}
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
               {logs.length === 0 && (
                 <tr><td colSpan="8" className="text-center py-4 text-muted">No audit logs found</td></tr>

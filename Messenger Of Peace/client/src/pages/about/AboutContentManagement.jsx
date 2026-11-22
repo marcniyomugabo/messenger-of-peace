@@ -3,8 +3,7 @@ import { Table, Button, Modal, Form, Badge, Row, Col } from 'react-bootstrap'
 import { FiPlus, FiEdit2, FiTrash2, FiFileText } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import api from '../../services/api'
-
-const PREDEFINED_KEYS = ['mission', 'vision', 'objectives', 'history', 'values', 'programs', 'achievements']
+import { ABOUT_SECTIONS, ABOUT_SECTION_BY_KEY } from '../../config/aboutSections'
 
 export default function AboutContentManagement() {
   const [sections, setSections] = useState([])
@@ -42,8 +41,8 @@ export default function AboutContentManagement() {
       setShowModal(false)
       resetForm()
       fetchSections()
-    } catch {
-      toast.error('Operation failed')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Operation failed')
     }
   }
 
@@ -120,7 +119,7 @@ export default function AboutContentManagement() {
             <thead>
               <tr>
                 <th>#</th>
-                <th>Section Key</th>
+                <th>Page block</th>
                 <th>Title</th>
                 <th>Content</th>
                 <th>Active</th>
@@ -131,7 +130,10 @@ export default function AboutContentManagement() {
               {sorted.map((s, idx) => (
                 <tr key={s.section_key || idx}>
                   <td>{idx + 1}</td>
-                  <td><Badge bg="info">{s.section_key}</Badge></td>
+                  <td>
+                    <div className="fw-semibold small">{ABOUT_SECTION_BY_KEY[s.section_key]?.label || 'Not shown on the page'}</div>
+                    <Badge bg="info">{s.section_key}</Badge>
+                  </td>
                   <td className="fw-semibold">{s.title}</td>
                   <td style={{ maxWidth: 300 }}>
                     {s.content ? s.content.substring(0, 80) + (s.content.length > 80 ? '...' : '') : '-'}
@@ -161,41 +163,42 @@ export default function AboutContentManagement() {
         </div>
       </div>
 
-      <Modal show={showModal} onHide={() => setShowModal(false)} centered>
+      <Modal show={showModal} onHide={() => setShowModal(false)} centered size="lg">
         <Modal.Header closeButton>
           <Modal.Title>{editItem ? 'Edit Section' : 'Add Section'}</Modal.Title>
         </Modal.Header>
         <Form onSubmit={handleSubmit}>
           <Modal.Body>
             <Form.Group className="mb-3">
-              <Form.Label>Section Key *</Form.Label>
-              <Form.Control
-                name="section_key"
-                value={form.section_key}
-                onChange={handleChange}
-                placeholder="e.g. mission, vision, values"
-                required
-                disabled={!!editItem}
-                list="section-key-suggestions"
-              />
-              <datalist id="section-key-suggestions">
-                {PREDEFINED_KEYS.map(k => <option key={k} value={k} />)}
-              </datalist>
-              <small className="text-muted">
-                Unique identifier. Suggestions: {PREDEFINED_KEYS.join(', ')}
-              </small>
+              <Form.Label>Page block *</Form.Label>
+              <Form.Select name="section_key" value={form.section_key} onChange={handleChange} required disabled={!!editItem}>
+                <option value="">Choose the block of the About page</option>
+                {ABOUT_SECTIONS.filter(s => editItem || !sections.some(x => x.section_key === s.key)).map(s => (
+                  <option key={s.key} value={s.key}>{s.label}</option>
+                ))}
+                {editItem && !ABOUT_SECTION_BY_KEY[form.section_key] && <option value={form.section_key}>{form.section_key}</option>}
+              </Form.Select>
             </Form.Group>
+            <div className="alert alert-light border small mb-3">
+              <strong>How to write it:</strong>{' '}
+              {ABOUT_SECTION_BY_KEY[form.section_key]?.help || 'Choose a block to see its format.'}
+              <div className="text-muted mt-1">
+                Paragraphs: separate them with an empty line. List item: start the line with "- ".
+                Card: put its parts on one line separated by " | ".
+              </div>
+            </div>
             <Form.Group className="mb-3">
               <Form.Label>Title *</Form.Label>
               <Form.Control name="title" value={form.title} onChange={handleChange} required />
             </Form.Group>
             <Form.Group className="mb-3">
-              <Form.Label>Content *</Form.Label>
-              <Form.Control as="textarea" rows={6} name="content" value={form.content} onChange={handleChange} required />
+              <Form.Label>Content</Form.Label>
+              <Form.Control as="textarea" rows={10} name="content" value={form.content} onChange={handleChange} />
             </Form.Group>
             <Form.Group className="mb-3">
-              <Form.Label>Image URL</Form.Label>
-              <Form.Control name="image" value={form.image} onChange={handleChange} placeholder="https://example.com/image.jpg" />
+              <Form.Label>Image</Form.Label>
+              <Form.Control name="image" value={form.image} onChange={handleChange} placeholder="/images/scout.JPEG" />
+              <Form.Text className="text-muted">Only used by the Introduction block.</Form.Text>
             </Form.Group>
             <Row className="g-3">
               <Col md={6}>

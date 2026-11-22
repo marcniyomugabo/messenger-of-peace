@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react'
 import { Table, Button, Modal, Form, Badge, Row, Col } from 'react-bootstrap'
-import { FiPlus, FiEdit2, FiTrash2, FiBook, FiDownload } from 'react-icons/fi'
+import { FiPlus, FiEdit2, FiTrash2, FiBook, FiDownload, FiExternalLink } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import api from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
+import { LEADERS } from '../../config/roles'
 
 export default function LibraryManagement() {
+  const { hasRole } = useAuth()
+  const canDelete = hasRole(...LEADERS) // the server lets only super admin and chief delete
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [saving, setSaving] = useState(false)
   const [resources, setResources] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
@@ -49,19 +55,36 @@ export default function LibraryManagement() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!selectedFile && !form.file_path.trim()) {
+      toast.error('Choose a file to upload, or give the address of the file.')
+      return
+    }
+    setSaving(true)
     try {
+      const data = { ...form }
+      // A chosen file is uploaded first; its address becomes the resource's file.
+      if (selectedFile) {
+        const fd = new FormData()
+        fd.append('file', selectedFile)
+        const up = await api.post('/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+        data.file_path = up.data.data.file_path
+        data.file_size = selectedFile.size
+        data.file_type = typeFromName(selectedFile.name)
+      }
       if (editItem) {
-        await api.put(`/library/${editItem.id}`, form)
+        await api.put(`/library/${editItem.id}`, data)
         toast.success('Resource updated')
       } else {
-        await api.post('/library', form)
+        await api.post('/library', data)
         toast.success('Resource created')
       }
       setShowModal(false)
       resetForm()
       fetchResources()
-    } catch {
-      toast.error('Operation failed')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not save the resource')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -90,31 +113,46 @@ export default function LibraryManagement() {
 
   const resetForm = () => {
     setEditItem(null)
+    setSelectedFile(null)
     setForm({
       title: '', description: '', category: '', author: '', file_path: '',
       cover_image: '', file_type: 'PDF', tags: '', is_featured: 0, status: 'published'
     })
   }
 
-  const fileTypeBadge = (type) => {
-    const variants = { PDF: 'danger', Document: 'primary', Video: 'info', Audio: 'success', Other: 'secondary' }
-    return <Badge bg={variants[type] || 'secondary'}>{type || 'Other'}</Badge>
+  // The kind of file, from its name ("guide.pdf" -> "PDF").
+  const typeFromName = (name) => {
+    const ext = String(name || '').split('?')[0].split('.').pop().toLowerCase()
+    return { pdf: 'PDF', doc: 'Document', docx: 'Document', ppt: 'Presentation', pptx: 'Presentation', mp4: 'Video', mp3: 'Audio' }[ext] || 'Other'
+  }
+  const fileTypeBadge = (r) => {
+    const type = typeFromName(r.file_path) !== 'Other' ? typeFromName(r.file_path) : (r.file_type || 'Other')
+    const variants = { PDF: 'danger', Document: 'primary', Presentation: 'warning', Video: 'info', Audio: 'success' }
+    return <Badge bg={variants[type] || 'secondary'}>{type}</Badge>
   }
 
+  // Status is stored as "Published" or "published" depending on who saved it.
+  const statusOf = (s) => String(s || 'published').toLowerCase()
   const statusBadge = (status) => {
     const variants = { published: 'success', draft: 'warning', archived: 'secondary' }
-    return <Badge bg={variants[status] || 'secondary'}>{status || 'published'}</Badge>
+    const s = statusOf(status)
+    return <Badge bg={variants[s] || 'secondary'} className="text-capitalize">{s}</Badge>
+  }
+  const sizeText = (bytes) => {
+    const n = Number(bytes)
+    if (!n) return '-'
+    return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`
   }
 
   const filtered = resources.filter(r => {
     const matchSearch = !search || r.title?.toLowerCase().includes(search.toLowerCase()) ||
       r.author?.toLowerCase().includes(search.toLowerCase())
     const matchCategory = !categoryFilter || r.category === categoryFilter
-    const matchType = !fileTypeFilter || r.file_type === fileTypeFilter
+    const matchType = !fileTypeFilter || typeFromName(r.file_path) === fileTypeFilter || r.file_type === fileTypeFilter
     return matchSearch && matchCategory && matchType
   })
 
-  const published = resources.filter(r => r.status === 'published').length
+  const published = resources.filter(r => statusOf(r.status) === 'published').length
   const featured = resources.filter(r => r.is_featured).length
 
   return (
@@ -134,8 +172,8 @@ export default function LibraryManagement() {
           </div>
         </Col>
         <Col md={4}>
-          <div className="kpi-card" style={{ borderLeftColor: '#16A34A' }}>
-            <div className="kpi-value" style={{ color: '#16A34A' }}>{published}</div>
+          <div className="kpi-card" style={{ borderLeftColor: 'var(--mop-success)' }}>
+            <div className="kpi-value" style={{ color: 'var(--mop-success)' }}>{published}</div>
             <div className="kpi-label">Published</div>
           </div>
         </Col>
@@ -164,6 +202,7 @@ export default function LibraryManagement() {
             <option value="">All File Types</option>
             <option value="PDF">PDF</option>
             <option value="Document">Document</option>
+            <option value="Presentation">Presentation</option>
             <option value="Video">Video</option>
             <option value="Audio">Audio</option>
             <option value="Other">Other</option>
@@ -194,18 +233,23 @@ export default function LibraryManagement() {
                   <td className="fw-semibold">{r.title}</td>
                   <td>{r.author || '-'}</td>
                   <td>{r.category || '-'}</td>
-                  <td>{fileTypeBadge(r.file_type)}</td>
-                  <td>{r.file_size || r.size || '-'}</td>
+                  <td>{fileTypeBadge(r)}</td>
+                  <td>{sizeText(r.file_size)}</td>
                   <td>
                     <span className="d-flex align-items-center gap-1">
-                      <FiDownload size={14} /> {r.downloads || 0}
+                      <FiDownload size={14} /> {r.download_count || 0}
                     </span>
                   </td>
                   <td>{statusBadge(r.status)}</td>
                   <td>
                     <div className="d-flex gap-1">
+                      {r.file_path && (
+                        <Button variant="outline-primary" size="sm" href={encodeURI(r.file_path)} target="_blank" rel="noopener noreferrer" title="Open the file"><FiExternalLink /></Button>
+                      )}
                       <Button variant="outline-secondary" size="sm" onClick={() => handleEdit(r)} title="Edit"><FiEdit2 /></Button>
-                      <Button variant="outline-danger" size="sm" onClick={() => handleDelete(r.id)} title="Delete"><FiTrash2 /></Button>
+                      {canDelete && (
+                        <Button variant="outline-danger" size="sm" onClick={() => handleDelete(r.id)} title="Delete"><FiTrash2 /></Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -253,8 +297,18 @@ export default function LibraryManagement() {
               </Col>
               <Col md={12}>
                 <Form.Group className="mb-3">
-                  <Form.Label>File Path / URL *</Form.Label>
-                  <Form.Control name="file_path" value={form.file_path} onChange={handleChange} placeholder="https://..." required />
+                  <Form.Label>File *</Form.Label>
+                  <Form.Control type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png"
+                    onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
+                  <Form.Text className="text-muted">
+                    {editItem && form.file_path ? <>Current file: <a href={encodeURI(form.file_path)} target="_blank" rel="noopener noreferrer">{decodeURI(form.file_path.split('/').pop())}</a>. Choose a new file only to replace it.</> : 'Upload the document (PDF, Word, PowerPoint, Excel or a picture).'}
+                  </Form.Text>
+                </Form.Group>
+              </Col>
+              <Col md={12}>
+                <Form.Group className="mb-3">
+                  <Form.Label className="small text-muted">…or the address of a file that is already online</Form.Label>
+                  <Form.Control size="sm" name="file_path" value={form.file_path} onChange={handleChange} placeholder="https://..." disabled={!!selectedFile} />
                 </Form.Group>
               </Col>
               <Col md={12}>
@@ -300,7 +354,7 @@ export default function LibraryManagement() {
           </Modal.Body>
           <Modal.Footer>
             <Button variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
-            <Button type="submit" variant="primary">{editItem ? 'Update' : 'Create'}</Button>
+            <Button type="submit" variant="primary" disabled={saving}>{saving ? 'Saving…' : editItem ? 'Update' : 'Create'}</Button>
           </Modal.Footer>
         </Form>
       </Modal>

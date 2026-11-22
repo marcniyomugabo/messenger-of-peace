@@ -408,9 +408,9 @@ export default function UserManagement() {
             {!editing && (
               <Form.Group className="mb-3">
                 <Form.Label className="fw-semibold">Password *</Form.Label>
-                <Form.Control type="password" required minLength={6} value={form.password}
+                <Form.Control type="password" required minLength={8} value={form.password}
                   onChange={e => setForm({ ...form, password: e.target.value })}
-                  placeholder="Minimum 6 characters" style={{ border: '1px solid #DDD6FE' }} />
+                  placeholder="Minimum 8 characters" style={{ border: '1px solid #DDD6FE' }} />
               </Form.Group>
             )}
           </Modal.Body>
@@ -434,9 +434,9 @@ export default function UserManagement() {
           <Modal.Body>
             <Form.Group>
               <Form.Label className="fw-semibold">New Password</Form.Label>
-              <Form.Control type="password" required minLength={6} value={newPassword}
+              <Form.Control type="password" required minLength={8} value={newPassword}
                 onChange={e => setNewPassword(e.target.value)}
-                placeholder="Enter new password (min 6 characters)" style={{ border: '1px solid #DDD6FE' }} />
+                placeholder="Enter new password (min 8 characters)" style={{ border: '1px solid #DDD6FE' }} />
             </Form.Group>
           </Modal.Body>
           <Modal.Footer>

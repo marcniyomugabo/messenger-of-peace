@@ -32,9 +32,16 @@ export function AuthProvider({ children }) {
       const res = await api.post('/auth/login', { email, password })
       const { token: newToken, refreshToken, user: userData } = res.data.data
       localStorage.setItem('mop_token', newToken)
+      // Kept so api.js can get a new access token when the 1-hour one expires.
+      localStorage.setItem('mop_refresh', refreshToken)
       localStorage.setItem('mop_user', JSON.stringify(userData))
       setToken(newToken)
       setUser(userData)
+      // Login does not include permissions; load the full profile so pages can check them.
+      api.get('/auth/me').then((me) => {
+        setUser(me.data.data)
+        localStorage.setItem('mop_user', JSON.stringify(me.data.data))
+      }).catch(() => {})
       toast.success('Welcome back!')
       return true
     } catch (err) {
@@ -58,12 +65,14 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try {
       if (token) {
-        await api.post('/auth/logout')
+        // Ends this device's sign-in only; other devices stay signed in.
+        await api.post('/auth/logout', { refreshToken: localStorage.getItem('mop_refresh') })
       }
     } catch (e) {
       // ignore logout error
     }
     localStorage.removeItem('mop_token')
+    localStorage.removeItem('mop_refresh')
     localStorage.removeItem('mop_user')
     setToken(null)
     setUser(null)

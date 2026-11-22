@@ -4,11 +4,37 @@
   --mop-light: #F3E8FF;
   --mop-dark: #581C87;
   --mop-accent: #A855F7;
-  --mop-success: #7C3AED;
-  --mop-warning: #9333EA;
-  --mop-danger: #581C87;
-  --mop-info: #6D28D9;
+  /* Status colours: they carry meaning (paid / pending / unpaid / note), so they are not purple. */
+  --mop-success: #16A34A;
+  --mop-success-bg: #F0FDF4;
+  --mop-warning: #F59E0B;
+  --mop-warning-bg: #FFFBEB;
+  --mop-danger: #DC2626;
+  --mop-danger-bg: #FEF2F2;
+  --mop-info: #3B82F6;
+  --mop-info-bg: #EFF6FF;
   --mop-bg: #FAFAFA;
+
+  /* Bootstrap uses the same colours: its "primary" is the brand purple, and its
+     success / warning / danger / info are the status colours above. */
+  --bs-primary: #6B21A8;
+  --bs-primary-rgb: 107, 33, 168;
+  --bs-success: #16A34A;
+  --bs-success-rgb: 22, 163, 74;
+  --bs-warning: #F59E0B;
+  --bs-warning-rgb: 245, 158, 11;
+  --bs-danger: #DC2626;
+  --bs-danger-rgb: 220, 38, 38;
+  --bs-info: #3B82F6;
+  --bs-info-rgb: 59, 130, 246;
+  --bs-link-color: #6B21A8;
+  --bs-link-color-rgb: 107, 33, 168;
+  --bs-link-hover-color: #581C87;
+  --bs-link-hover-color-rgb: 88, 28, 135;
+  --bs-form-invalid-color: #DC2626;
+  --bs-form-invalid-border-color: #DC2626;
+  --bs-form-valid-color: #16A34A;
+  --bs-form-valid-border-color: #16A34A;
   --mop-text: #1F2937;
   --mop-text-light: #6B7280;
   --mop-gradient: linear-gradient(135deg, #3b0764 0%, #6B21A8 35%, #9333EA 70%, #7c3aed 100%);
@@ -95,12 +121,25 @@ a:hover {
   align-items: center;
   flex-shrink: 0;
 }
-.mop-header-logo {
-  width: 48px;
-  height: 48px;
+/* The badge's purple rim disappears on purple bars, so it sits on a white disc
+   with a light ring (header, footer and dashboard sidebar). */
+.mop-header-logo,
+.mop-footer-logo,
+.sidebar-header .logo-img {
   border-radius: 50%;
-  object-fit: cover;
-  filter: drop-shadow(0 1px 4px rgba(0,0,0,0.2));
+  object-fit: contain;
+  background: #fff;
+  padding: 2px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.mop-header-logo {
+  width: 52px;
+  height: 52px;
+}
+.mop-footer-logo {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
 }
 .mop-header-nav {
   flex: 1;
@@ -125,6 +164,23 @@ a:hover {
   letter-spacing: 0.2px;
   border-bottom: 2px solid transparent;
   transition: all 0.25s ease;
+}
+/* Small laptops (992-1199px): the full menu is shown, so the links sit closer together to fit on one line. */
+@media (min-width: 992px) and (max-width: 1199px) {
+  .mop-header-inner { padding: 0.6rem 1rem; }
+  .mop-header-nav-list li a { padding: 0.6rem 0.5rem; font-size: 0.82rem; }
+}
+/* Laptops (1200-1365px): slightly closer links so the full menu stays on one line. */
+@media (min-width: 1200px) and (max-width: 1365px) {
+  .mop-header-inner { padding: 0.6rem 1.25rem; }
+  .mop-header-nav-list li a { padding: 0.6rem 0.5rem; font-size: 0.84rem; }
+}
+.mop-header-nav-list li a { white-space: nowrap; }
+/* If the menu (dashboard: Navigation) gets too long for the screen, the links wrap onto a
+   second line instead of pushing the page sideways. */
+@media (min-width: 992px) {
+  .mop-header-nav { min-width: 0; }
+  .mop-header-nav-list { flex-wrap: wrap; justify-content: center; }
 }
 .mop-header-nav-list li a:hover {
   color: #fff;
@@ -684,6 +740,12 @@ a:hover {
   color: #fff;
 }
 
+/* The small icons beside the footer's contact and meeting details. */
+.mop-footer-icon {
+  color: #a78bfa;
+  flex-shrink: 0;
+}
+
 .mop-footer-bottom {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding-top: 1.5rem;
@@ -767,6 +829,127 @@ a:hover {
   z-index: 1030;
 }
 
+/* Notification bell (top bar) */
+.mop-bell-count {
+  font-size: 0.6rem;
+  min-width: 18px;
+}
+.mop-bell-menu {
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.mop-bell-list {
+  max-height: 420px;
+  overflow-y: auto;
+}
+.mop-bell-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-bottom: 1px solid #f1f1f4;
+  background: #fff;
+  text-align: left;
+  transition: background 0.15s;
+}
+.mop-bell-item:last-child { border-bottom: 0; }
+.mop-bell-item:hover,
+.mop-bell-item:focus-visible { background: #F9FAFB; outline: none; }
+.mop-bell-item.unread { background: #F5F3FF; }
+.mop-bell-item.unread:hover,
+.mop-bell-item.unread:focus-visible { background: #EDE9FE; }
+.mop-bell-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.mop-bell-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #1f2937;
+}
+.mop-bell-item.unread .mop-bell-title { font-weight: 700; }
+.mop-bell-message {
+  font-size: 0.8rem;
+  color: #6b7280;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.mop-bell-time {
+  font-size: 0.72rem;
+  color: var(--mop-primary);
+  margin-top: 2px;
+}
+.mop-bell-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mop-primary);
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+/* Attendance */
+.att-rate-track { height: 6px; background: #EEF0F3; border-radius: 99px; overflow: hidden; flex-shrink: 0; }
+.att-rate-fill { height: 100%; border-radius: 99px; }
+.att-pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.78rem; font-weight: 600; }
+.att-sessions tbody tr { cursor: pointer; }
+.att-attention td { background: var(--mop-danger-bg) !important; }
+.att-count { font-size: 0.9rem; white-space: nowrap; }
+.att-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 0.75rem 1rem; border-bottom: 1px solid #F1F1F4;
+}
+.att-row:last-child { border-bottom: 0; }
+.att-row.unmarked { background: #FFFBEB; }
+.att-member { min-width: 0; flex: 1; }
+.att-controls { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
+.att-marks { display: inline-flex; gap: 6px; }
+.att-mark {
+  min-width: 44px; padding: 0.35rem 0.7rem; border: 1px solid; border-radius: 8px;
+  background: #fff; font-size: 0.82rem; font-weight: 600; line-height: 1.2; transition: all 0.12s;
+}
+.att-mark:hover:not(:disabled):not(.on) { background: #F9FAFB; border-color: currentColor !important; }
+.att-mark:disabled { opacity: 0.65; cursor: default; }
+.att-mark:focus-visible { outline: 2px solid var(--mop-primary); outline-offset: 2px; }
+.att-reason { width: 300px; max-width: 100%; }
+.att-savebar {
+  position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; padding: 0.75rem 1rem; background: #fff; border-radius: 12px;
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
+}
+@media (max-width: 575.98px) {
+  .att-row { flex-direction: column; align-items: stretch; }
+  .att-controls { align-items: stretch; }
+  .att-marks { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .att-reason { width: 100%; }
+}
+
+/* Notice board and Home announcements */
+.notice-content { white-space: pre-line; color: #374151; line-height: 1.6; }
+.notice-high { border-left: 4px solid var(--mop-danger) !important; }
+.notice-focus { box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.35) !important; }
+.home-notices { background: var(--mop-light, #F5F3FF); }
+.home-notice { background: #fff; border-radius: 12px; padding: 1rem 1.25rem; border-left: 4px solid var(--mop-primary); height: 100%; }
+.home-notice.high { border-left-color: var(--mop-danger); }
+.home-notice p { white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Notifications page rows */
+.mop-notification-row { cursor: pointer; transition: background 0.15s; }
+.mop-notification-row:last-child { border-bottom: 0 !important; }
+.mop-notification-row:hover,
+.mop-notification-row:focus-visible { background: #F9FAFB; outline: none; }
+.mop-notification-row.unread { background: #F5F3FF; }
+.mop-notification-row.unread:hover,
+.mop-notification-row.unread:focus-visible { background: #EDE9FE; }
+
 /* Dashboard Layout */
 .mop-dashboard-wrapper {
   margin-left: 260px;
@@ -825,6 +1008,14 @@ a:hover {
   color: #fff;
   font-weight: 600;
   border: none;
+  /* .mop-card is not a Bootstrap .card, so the header gets no padding of its own. */
+  padding: 1rem 1.5rem;
+}
+
+/* Forms you type in should stay still on hover. */
+.mop-card.mop-card-static:hover {
+  transform: none;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
 }
 
 /* Table Styles */
@@ -932,6 +1123,96 @@ a:hover {
   font-size: 2.5rem;
   color: var(--mop-secondary);
   margin-bottom: 1rem;
+}
+
+/* Document cards (Library and Information pages): components/DocumentCard.jsx */
+.doc-card {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #ECE7F5;
+  border-radius: 14px;
+  padding: 1.25rem 1.25rem 1rem;
+  box-shadow: 0 1px 3px rgba(17, 12, 46, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.doc-card:hover {
+  transform: translateY(-3px);
+  border-color: #DDD3F0;
+  box-shadow: 0 10px 24px rgba(107, 33, 168, 0.10);
+}
+.doc-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.doc-card-type {
+  width: 52px;
+  height: 56px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.doc-card-type-icon { font-size: 1.35rem; line-height: 1; }
+.doc-card-type-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; margin-top: 4px; }
+.doc-card-category {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mop-primary);
+  background: var(--mop-light);
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  text-align: right;
+}
+.doc-card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1F2937;
+  line-height: 1.35;
+  margin-bottom: 0.35rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.doc-card-subtitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--mop-primary);
+  margin-bottom: 0.35rem;
+}
+.doc-card-desc {
+  font-size: 0.875rem;
+  color: var(--mop-text-light);
+  line-height: 1.55;
+  margin-bottom: 1rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.doc-card-footer {
+  margin-top: auto;
+  padding-top: 0.85rem;
+  border-top: 1px solid #F1EDF7;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.doc-card-kind { font-size: 0.75rem; color: var(--mop-text-light); }
+.doc-card-footer > .d-flex { margin-left: auto; }
+/* Small laptops: cards are narrow, so the buttons get the whole row (the tile already shows the type). */
+@media (min-width: 992px) and (max-width: 1199px) {
+  .doc-card-kind { display: none; }
 }
 
 /* Activity Cards */
@@ -1182,7 +1463,7 @@ a:hover {
   }
   .mop-hamburger { display: flex; }
   .mop-header-cta { padding: 0.4rem 1rem; font-size: 0.8rem; }
-  .mop-header-logo { width: 40px; height: 40px; }
+  .mop-header-logo { width: 44px; height: 44px; }
   .mop-header-scout-logo { width: 36px; height: 36px; }
   .mop-header-inner { padding: 0.5rem 1rem; }
 
@@ -1548,12 +1829,64 @@ a:hover {
   }
 }
 
-/* ===== PURPLE-ONLY BOOTSTRAP OVERRIDES ===== */
-.text-success { color: #7C3AED !important; }
-.text-warning { color: #9333EA !important; }
-.text-danger { color: #581C87 !important; }
-.text-info { color: #6D28D9 !important; }
-.bg-success { background-color: #7C3AED !important; color: #fff !important; }
-.bg-warning { background-color: #9333EA !important; color: #fff !important; }
-.bg-danger { background-color: #581C87 !important; color: #fff !important; }
-.bg-info { background-color: #6D28D9 !important; color: #fff !important; }
+/* ===== BOOTSTRAP COLOURS =====
+   Brand: Bootstrap's "primary" buttons and outlines are purple.
+   Status: success / warning / danger / info keep their meaning (green / amber / red / blue);
+   the colours themselves are set in :root. */
+.btn-primary {
+  --bs-btn-bg: var(--mop-primary);
+  --bs-btn-border-color: var(--mop-primary);
+  --bs-btn-hover-bg: var(--mop-dark);
+  --bs-btn-hover-border-color: var(--mop-dark);
+  --bs-btn-active-bg: var(--mop-dark);
+  --bs-btn-active-border-color: var(--mop-dark);
+  --bs-btn-disabled-bg: var(--mop-primary);
+  --bs-btn-disabled-border-color: var(--mop-primary);
+  --bs-btn-focus-shadow-rgb: 107, 33, 168;
+}
+.btn-outline-primary {
+  --bs-btn-color: var(--mop-primary);
+  --bs-btn-border-color: var(--mop-primary);
+  --bs-btn-hover-bg: var(--mop-primary);
+  --bs-btn-hover-border-color: var(--mop-primary);
+  --bs-btn-active-bg: var(--mop-dark);
+  --bs-btn-active-border-color: var(--mop-dark);
+  --bs-btn-disabled-color: var(--mop-primary);
+  --bs-btn-disabled-border-color: var(--mop-primary);
+  --bs-btn-focus-shadow-rgb: 107, 33, 168;
+}
+.btn-success {
+  --bs-btn-bg: var(--mop-success);
+  --bs-btn-border-color: var(--mop-success);
+  --bs-btn-hover-bg: #15803D;
+  --bs-btn-hover-border-color: #15803D;
+}
+.btn-danger {
+  --bs-btn-bg: var(--mop-danger);
+  --bs-btn-border-color: var(--mop-danger);
+  --bs-btn-hover-bg: #B91C1C;
+  --bs-btn-hover-border-color: #B91C1C;
+}
+.btn-outline-success {
+  --bs-btn-color: var(--mop-success);
+  --bs-btn-border-color: var(--mop-success);
+  --bs-btn-hover-bg: var(--mop-success);
+  --bs-btn-hover-border-color: var(--mop-success);
+  --bs-btn-active-bg: #15803D;
+  --bs-btn-active-border-color: #15803D;
+}
+.btn-outline-danger {
+  --bs-btn-color: var(--mop-danger);
+  --bs-btn-border-color: var(--mop-danger);
+  --bs-btn-hover-bg: var(--mop-danger);
+  --bs-btn-hover-border-color: var(--mop-danger);
+  --bs-btn-active-bg: #B91C1C;
+  --bs-btn-active-border-color: #B91C1C;
+}
+/* White text is hard to read on amber, so amber badges use dark text. */
+.badge.bg-warning { color: #1F2937; }
+/* Switches and checkboxes in the brand colour. */
+.form-check-input:checked {
+  background-color: var(--mop-primary);
+  border-color: var(--mop-primary);
+}

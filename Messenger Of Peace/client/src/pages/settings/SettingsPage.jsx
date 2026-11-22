@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Row, Col, Card, Form, Button, Tab, Tabs, Spinner } from 'react-bootstrap'
-import { FiSettings, FiInfo, FiPhone, FiUsers } from 'react-icons/fi'
+import { FiSettings, FiInfo, FiPhone, FiUsers, FiHeart } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import api from '../../services/api'
+import { DEFAULT_SETTINGS } from '../../utils/siteSettings'
+
+const SUPPORT_KEYS = ['support_text', 'support_momo_number', 'support_momo_name', 'support_bank_name', 'support_bank_account', 'support_bank_holder']
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
@@ -15,7 +18,11 @@ export default function SettingsPage() {
   const [contactInfo, setContactInfo] = useState({
     whatsapp_contact: '', phone_contact: '', email_contact: '',
     meeting_day: '', meeting_time: '', meeting_location: '',
+    facebook_url: '', twitter_url: '', instagram_url: '',
   })
+
+  // Support MOP page details (public).
+  const [support, setSupport] = useState(Object.fromEntries(SUPPORT_KEYS.map(k => [k, ''])))
 
   const [systemSettings, setSystemSettings] = useState({
     monthly_contribution: '', max_members_per_unit: '',
@@ -37,17 +44,23 @@ export default function SettingsPage() {
         group_name: settingsMap.group_name || 'Messengers of Peace Scout Group',
         group_motto: settingsMap.group_motto || 'Kirazira Bugufi - Be Prepared',
         group_location: settingsMap.group_location || settingsMap.meeting_location || 'Camp Kigali, Nyarugenge District, Kigali',
-        group_description: settingsMap.group_description || 'A dedicated scout group committed to training youth in scouting values, leadership, and community service.',
+        group_description: settingsMap.group_description || DEFAULT_SETTINGS.group_description,
       })
 
+      // These are shown on the website (Footer, Contact page, Home); empty ones fall back to the website's defaults.
+      const site = key => settingsMap[key] ?? DEFAULT_SETTINGS[key]
       setContactInfo({
-        whatsapp_contact: settingsMap.whatsapp_contact || '+250722784670',
-        phone_contact: settingsMap.phone_contact || '+250786188913',
-        email_contact: settingsMap.email_contact || 'info@mopscouts.rw',
-        meeting_day: settingsMap.meeting_day || 'Sunday',
-        meeting_time: settingsMap.meeting_time || '13:30 - 16:30',
-        meeting_location: settingsMap.meeting_location || 'Camp Kigali',
+        whatsapp_contact: site('whatsapp_contact'),
+        phone_contact: site('phone_contact'),
+        email_contact: site('email_contact'),
+        meeting_day: site('meeting_day'),
+        meeting_time: site('meeting_time'),
+        meeting_location: site('meeting_location'),
+        facebook_url: site('facebook_url'),
+        twitter_url: site('twitter_url'),
+        instagram_url: site('instagram_url'),
       })
+      setSupport(Object.fromEntries(SUPPORT_KEYS.map(k => [k, settingsMap[k] ?? ''])))
 
       setSystemSettings({
         monthly_contribution: settingsMap.monthly_contribution || '500',
@@ -56,8 +69,8 @@ export default function SettingsPage() {
         attendance_required: settingsMap.attendance_required !== 'false',
         email_notifications: settingsMap.email_notifications !== 'false',
       })
-    } catch {
-      // Use defaults on failure
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not load settings')
     } finally {
       setLoading(false)
     }
@@ -69,8 +82,8 @@ export default function SettingsPage() {
     try {
       await api.put('/settings', { settings: groupInfo })
       toast.success('Group information updated')
-    } catch {
-      toast.error('Failed to update group information')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update group information')
     } finally {
       setSaving(false)
     }
@@ -82,8 +95,21 @@ export default function SettingsPage() {
     try {
       await api.put('/settings', { settings: contactInfo })
       toast.success('Contact information updated')
-    } catch {
-      toast.error('Failed to update contact information')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update contact information')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSupportSave = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await api.put('/settings', { settings: support })
+      toast.success('Support page updated')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update the Support page')
     } finally {
       setSaving(false)
     }
@@ -105,8 +131,8 @@ export default function SettingsPage() {
       await api.put('/settings', payload)
       await api.put('/contributions/settings', { monthly_amount: parseFloat(systemSettings.monthly_contribution) }).catch(() => {})
       toast.success('System settings updated')
-    } catch {
-      toast.error('Failed to update system settings')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update system settings')
     } finally {
       setSaving(false)
     }
@@ -169,6 +195,7 @@ export default function SettingsPage() {
                         value={groupInfo.group_description}
                         onChange={(e) => setGroupInfo({ ...groupInfo, group_description: e.target.value })}
                       />
+                      <Form.Text className="text-muted">The group name and description are shown in the website footer.</Form.Text>
                     </Form.Group>
                   </Col>
                 </Row>
@@ -240,7 +267,103 @@ export default function SettingsPage() {
                       />
                     </Form.Group>
                   </Col>
+                  <Col md={12}>
+                    <h6 className="mt-2 mb-0">Social media links</h6>
+                    <small className="text-muted">Full web addresses. An icon appears in the website footer for each one filled in; leave empty to hide it.</small>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group>
+                      <Form.Label>Facebook</Form.Label>
+                      <Form.Control
+                        type="url"
+                        placeholder="https://facebook.com/..."
+                        value={contactInfo.facebook_url}
+                        onChange={(e) => setContactInfo({ ...contactInfo, facebook_url: e.target.value })}
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group>
+                      <Form.Label>X (Twitter)</Form.Label>
+                      <Form.Control
+                        type="url"
+                        placeholder="https://x.com/..."
+                        value={contactInfo.twitter_url}
+                        onChange={(e) => setContactInfo({ ...contactInfo, twitter_url: e.target.value })}
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group>
+                      <Form.Label>Instagram</Form.Label>
+                      <Form.Control
+                        type="url"
+                        placeholder="https://instagram.com/..."
+                        value={contactInfo.instagram_url}
+                        onChange={(e) => setContactInfo({ ...contactInfo, instagram_url: e.target.value })}
+                      />
+                    </Form.Group>
+                  </Col>
                 </Row>
+                <Form.Text className="text-muted d-block mt-2">These details are shown on the website: footer, Contact page and Home page.</Form.Text>
+                <Button type="submit" variant="primary" className="mt-3" disabled={saving}>
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </Form>
+            </Card.Body>
+          </Card>
+        </Tab>
+
+        <Tab eventKey="support" title={<span><FiHeart className="me-1" /> Support Page</span>}>
+          <Card className="mop-card">
+            <Card.Body className="p-4">
+              <p className="text-muted small">
+                Shown on the website's <a href="/support" target="_blank" rel="noopener noreferrer">Support MOP</a> page.
+                A way of giving whose details are empty is not shown.
+              </p>
+              <Form onSubmit={handleSupportSave}>
+                <Row className="g-3">
+                  <Col md={12}>
+                    <Form.Group>
+                      <Form.Label>Why support us (text)</Form.Label>
+                      <Form.Control as="textarea" rows={4} value={support.support_text}
+                        onChange={(e) => setSupport({ ...support, support_text: e.target.value })}
+                        placeholder="Empty = a standard text about what support pays for" />
+                      <Form.Text className="text-muted">Leave an empty line between paragraphs.</Form.Text>
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label>Mobile Money number</Form.Label>
+                      <Form.Control value={support.support_momo_number} onChange={(e) => setSupport({ ...support, support_momo_number: e.target.value })} placeholder="e.g. 078 000 0000" />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label>Mobile Money name</Form.Label>
+                      <Form.Control value={support.support_momo_name} onChange={(e) => setSupport({ ...support, support_momo_name: e.target.value })} placeholder="Name shown when sending" />
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group>
+                      <Form.Label>Bank</Form.Label>
+                      <Form.Control value={support.support_bank_name} onChange={(e) => setSupport({ ...support, support_bank_name: e.target.value })} />
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group>
+                      <Form.Label>Account number</Form.Label>
+                      <Form.Control value={support.support_bank_account} onChange={(e) => setSupport({ ...support, support_bank_account: e.target.value })} />
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group>
+                      <Form.Label>Account name</Form.Label>
+                      <Form.Control value={support.support_bank_holder} onChange={(e) => setSupport({ ...support, support_bank_holder: e.target.value })} />
+                    </Form.Group>
+                  </Col>
+                </Row>
+                <Form.Text className="text-muted d-block mt-2">Only put the group's official account here: everything on this page is public.</Form.Text>
                 <Button type="submit" variant="primary" className="mt-3" disabled={saving}>
                   {saving ? 'Saving...' : 'Save Changes'}
                 </Button>
@@ -268,10 +391,14 @@ export default function SettingsPage() {
                     <Form.Group>
                       <Form.Check
                         type="switch"
-                        label="Require Attendance"
+                        label="Absence alerts"
                         checked={systemSettings.attendance_required}
                         onChange={(e) => setSystemSettings({ ...systemSettings, attendance_required: e.target.checked })}
                       />
+                      <Form.Text className="text-muted">
+                        When a member misses 3 registers in a row, their unit leader (or the chief and super
+                        admin, if the unit has no leader account) gets a notification.
+                      </Form.Text>
                     </Form.Group>
                   </Col>
                   <Col md={6}>
@@ -302,6 +429,10 @@ export default function SettingsPage() {
                         checked={systemSettings.email_notifications}
                         onChange={(e) => setSystemSettings({ ...systemSettings, email_notifications: e.target.checked })}
                       />
+                      <Form.Text className="text-muted">
+                        Emails applicants when their application is approved (with their login) or rejected.
+                        Concern alerts to the safeguarding leaders are always emailed.
+                      </Form.Text>
                     </Form.Group>
                   </Col>
                 </Row>

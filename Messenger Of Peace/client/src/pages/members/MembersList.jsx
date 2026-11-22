@@ -1,13 +1,22 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Table, Form, Badge, Button, Row, Col, InputGroup, Modal } from 'react-bootstrap'
-import { FiSearch, FiEye, FiTrash2, FiUserPlus, FiRefreshCw, FiDollarSign, FiCreditCard } from 'react-icons/fi'
+import { FiSearch, FiEye, FiTrash2, FiUserPlus, FiRefreshCw, FiDollarSign, FiCreditCard, FiAlertTriangle } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import api from '../../services/api'
+import { today } from '../../utils/date'
+import { startOfYear, RATE_HELP } from '../../utils/attendance'
+import { RateBar } from '../../components/attendance/AttendanceBits'
+import { useAuth } from '../../context/AuthContext'
+import { FINANCE, LEADERS } from '../../config/roles'
 
 const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 export default function MembersList() {
+  // Same rules as the server: payments are recorded by finance roles, members deactivated by leaders.
+  const { hasRole } = useAuth()
+  const canRecordPayment = hasRole(...FINANCE)
+  const canDeactivate = hasRole(...LEADERS)
   const [members, setMembers] = useState([])
   const [units, setUnits] = useState([])
   const [contributions, setContributions] = useState([])
@@ -26,10 +35,16 @@ export default function MembersList() {
 
   const now = new Date()
 
+  // Attendance rate this year and the missed-in-a-row flag, by member id.
+  const [attendance, setAttendance] = useState({})
+
   useEffect(() => {
     fetchMembers()
     fetchUnits()
     fetchContributions()
+    api.get('/attendance/summary', { params: { from: startOfYear(), to: today() } })
+      .then(res => setAttendance(Object.fromEntries((res.data.data.members || []).map(m => [m.member_id, m]))))
+      .catch(() => setAttendance({}))
   }, [])
 
   const fetchMembers = async () => {
@@ -117,7 +132,7 @@ export default function MembersList() {
       month: String(now.getMonth() + 1),
       year: String(now.getFullYear()),
       method: 'Cash',
-      date: now.toISOString().split('T')[0],
+      date: today(),
       notes: ''
     })
     setShowPayModal(true)
@@ -224,6 +239,7 @@ export default function MembersList() {
                 <th>Phone</th>
                 <th>Unit</th>
                 <th>Contribution</th>
+                <th title={`Attendance this year. ${RATE_HELP}`}>Attendance</th>
                 <th>Status</th>
                 <th>Joined</th>
                 <th>Actions</th>
@@ -242,10 +258,22 @@ export default function MembersList() {
                     <td>
                       <div className="d-flex align-items-center gap-1">
                         {contribBadge(contrib)}
-                        <Button variant="outline-success" size="sm" onClick={() => openPayModal(member)} title="Record Payment">
-                          <FiCreditCard />
-                        </Button>
+                        {canRecordPayment && (
+                          <Button variant="outline-success" size="sm" onClick={() => openPayModal(member)} title="Record Payment">
+                            <FiCreditCard />
+                          </Button>
+                        )}
                       </div>
+                    </td>
+                    <td>
+                      {attendance[member.id] ? (
+                        <div className="d-flex align-items-center gap-1">
+                          <RateBar rate={attendance[member.id].rate} width={50} />
+                          {attendance[member.id].needs_attention && (
+                            <FiAlertTriangle className="text-danger" title={`Missed the last ${attendance[member.id].missed_in_a_row} registers`} />
+                          )}
+                        </div>
+                      ) : <span className="text-muted small">–</span>}
                     </td>
                     <td>{statusBadge(member.status)}</td>
                     <td>{member.join_date || '-'}</td>
@@ -257,9 +285,11 @@ export default function MembersList() {
                         <Button variant="outline-secondary" size="sm" onClick={() => openEditUmusanzwe(member)} title="Set Umusanzwe">
                           <FiDollarSign />
                         </Button>
-                        <Button variant="outline-danger" size="sm" onClick={() => handleDelete(member.id)} title="Deactivate">
-                          <FiTrash2 />
-                        </Button>
+                        {canDeactivate && (
+                          <Button variant="outline-danger" size="sm" onClick={() => handleDelete(member.id)} title="Deactivate">
+                            <FiTrash2 />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -267,7 +297,7 @@ export default function MembersList() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan="9" className="text-center py-4 text-muted">
+                  <td colSpan="10" className="text-center py-4 text-muted">
                     {loading ? 'Loading...' : 'No members found'}
                   </td>
                 </tr>

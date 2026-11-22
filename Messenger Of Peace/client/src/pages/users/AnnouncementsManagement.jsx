@@ -4,6 +4,15 @@ import { FiBell, FiPlus, FiEdit3, FiTrash2, FiSearch } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import api from '../../services/api'
 
+// Same audiences as the server (routes/announcements.js).
+const PUBLIC_AUDIENCES = ['All', 'Parents']
+const AUDIENCE_HELP = {
+  All: 'All: shown on the website (Home page), on everyone\'s Notice board, and sent to every dashboard bell.',
+  Members: 'Members: everyone with a dashboard login (members and leaders). Not shown on the public website.',
+  Leaders: 'Leaders: dashboard staff only (chief, secretary, treasurer, unit leaders…). Not on the website.',
+  Parents: 'Parents: shown on the public website (parents have no logins) and on everyone\'s Notice board.',
+}
+
 export default function AnnouncementsManagement() {
   const [announcements, setAnnouncements] = useState([])
   const [counts, setCounts] = useState({})
@@ -13,6 +22,8 @@ export default function AnnouncementsManagement() {
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState({ title: '', content: '', priority: 'Medium', target_audience: 'All', status: 'Draft' })
+  const [sendEmail, setSendEmail] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const fetchAnnouncements = async () => {
     try {
@@ -32,29 +43,38 @@ export default function AnnouncementsManagement() {
 
   const openCreate = () => {
     setEditing(null)
+    setSendEmail(false)
     setForm({ title: '', content: '', priority: 'Medium', target_audience: 'All', status: 'Draft' })
     setShowModal(true)
   }
 
   const openEdit = (a) => {
     setEditing(a)
+    setSendEmail(false)
     setForm({ title: a.title, content: a.content, priority: a.priority, target_audience: a.target_audience, status: a.status })
     setShowModal(true)
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setSaving(true)
     try {
-      if (editing) {
-        await api.put(`/announcements/${editing.id}`, form)
-        toast.success('Announcement updated')
-      } else {
-        await api.post('/announcements', form)
-        toast.success('Announcement created')
-      }
+      const res = editing
+        ? await api.put(`/announcements/${editing.id}`, { ...form, send_email: sendEmail })
+        : await api.post('/announcements', { ...form, send_email: sendEmail })
+      // Tell the editor what actually went out.
+      const s = res.data.sent || {}
+      const parts = [editing ? 'Announcement updated' : 'Announcement created']
+      if (s.notified) parts.push(`sent to ${s.notified} dashboard bell(s)`)
+      if (s.email_addresses !== undefined) parts.push(s.emailed ? `emailed to ${s.emailed} address(es)` : `email not sent${s.email_addresses ? ' (email is not set up on the server)' : ' (nobody in this audience has an email address)'}`)
+      toast.success(parts.join(' · '))
       setShowModal(false)
       fetchAnnouncements()
-    } catch (err) { toast.error(err.response?.data?.error || 'Failed to save') }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const deleteAnnouncement = async (id) => {
@@ -133,8 +153,13 @@ export default function AnnouncementsManagement() {
                       <td><Badge bg="" style={{ background: priorityColor(a.priority), color: '#fff' }}>{a.priority}</Badge></td>
                       <td><small>{a.target_audience}</small></td>
                       <td><small>{a.author_name || 'Admin'}</small></td>
-                      <td><Badge bg="" style={{ background: statusColor(a.status), color: '#fff' }}>{a.status}</Badge></td>
-                      <td><small>{new Date(a.created_at).toLocaleDateString()}</small></td>
+                      <td>
+                        <Badge bg="" style={{ background: statusColor(a.status), color: '#fff' }}>{a.status}</Badge>
+                        <div className="small text-muted mt-1">
+                          {[a.notified_at && 'bell sent', a.emailed_at && 'emailed', PUBLIC_AUDIENCES.includes(a.target_audience) && a.status === 'Published' && 'on website'].filter(Boolean).join(' · ')}
+                        </div>
+                      </td>
+                      <td><small>{new Date(a.published_at || a.created_at).toLocaleDateString()}</small></td>
                       <td className="text-end pe-3">
                         <Button variant="link" size="sm" onClick={() => openEdit(a)} title="Edit">
                           <FiEdit3 style={{ color: '#7C3AED' }} />
@@ -202,15 +227,30 @@ export default function AnnouncementsManagement() {
                     style={{ border: '1px solid #DDD6FE' }}>
                     <option value="Draft">Draft</option>
                     <option value="Published">Published</option>
+                    <option value="Archived">Archived</option>
                   </Form.Select>
                 </Form.Group>
               </Col>
             </Row>
+            <div className="small text-muted mb-3">{AUDIENCE_HELP[form.target_audience]}</div>
+            {form.status === 'Published' && (
+              <div className="p-3 rounded" style={{ background: '#F9FAFB' }}>
+                {editing?.notified_at
+                  ? <div className="small text-muted mb-2">Already sent to the dashboard bell on {new Date(editing.notified_at).toLocaleString()}. Changes are shown, but not sent again.</div>
+                  : form.target_audience !== 'Parents' && <div className="small mb-2">When saved, it appears in the dashboard bell of everyone it is for.</div>}
+                {editing?.emailed_at ? (
+                  <div className="small text-muted">Already emailed on {new Date(editing.emailed_at).toLocaleString()}.</div>
+                ) : (
+                  <Form.Check type="switch" id="send-email" checked={sendEmail} onChange={e => setSendEmail(e.target.checked)}
+                    label="Also email it to the people it is for (those with an email address)" />
+                )}
+              </div>
+            )}
           </Modal.Body>
           <Modal.Footer>
             <Button variant="outline-secondary" onClick={() => setShowModal(false)}>Cancel</Button>
-            <Button type="submit" style={{ background: '#7C3AED', border: 'none' }}>
-              {editing ? 'Update' : 'Create'} Announcement
+            <Button type="submit" style={{ background: '#7C3AED', border: 'none' }} disabled={saving}>
+              {saving ? 'Saving…' : `${editing ? 'Update' : 'Create'} Announcement`}
             </Button>
           </Modal.Footer>
         </Form>

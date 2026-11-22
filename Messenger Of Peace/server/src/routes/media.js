@@ -4,6 +4,8 @@ const { param, validationResult } = require('express-validator');
 const pool = require('../config/db');
 const { authenticate, authorize } = require('../middleware/auth');
 const upload = require('../middleware/upload');
+const path = require('path');
+const { uploadDir } = require('../config/env');
 
 // GET / - All media
 router.get('/', async (req, res) => {
@@ -60,7 +62,7 @@ router.get('/:id', [param('id').isInt()], async (req, res) => {
 });
 
 // POST /upload
-router.post('/upload', authenticate, upload.single('file'), async (req, res) => {
+router.post('/upload', authenticate, authorize('super_admin', 'chief', 'media'), upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
 
@@ -87,8 +89,37 @@ router.post('/upload', authenticate, upload.single('file'), async (req, res) => 
   }
 });
 
+// POST / - Add media by path or link (a file already on the site, or an https:// address)
+// Only safe locations are accepted: a path like "javascript:..." would run code when clicked.
+const isSafeMediaPath = (p) =>
+  typeof p === 'string' && !p.includes('..') &&
+  (/^\/(uploads|images|videos)\/\S+$/.test(p) || /^https:\/\/\S+$/.test(p));
+
+router.post('/', authenticate, authorize('super_admin', 'chief', 'media'), async (req, res) => {
+  try {
+    const { title, file_path, file_type, caption, alt_text, is_public, is_approved } = req.body;
+    if (!isSafeMediaPath(file_path)) {
+      return res.status(400).json({ success: false, message: 'Path must start with /uploads/, /images/ or /videos/, or be an https:// link' });
+    }
+    const type = ['Photo', 'Video', 'Document'].includes(file_type) ? file_type : 'Photo';
+
+    const [result] = await pool.query(
+      `INSERT INTO media (title, file_path, file_type, caption, alt_text, is_public, is_approved, uploaded_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [title || file_path.split('/').pop(), file_path, type, caption || null, alt_text || null,
+       is_public ? 1 : 0, is_approved ? 1 : 0, req.user.id]
+    );
+
+    const [newMedia] = await pool.query('SELECT * FROM media WHERE id = ?', [result.insertId]);
+    res.status(201).json({ success: true, message: 'Media added', data: newMedia[0] });
+  } catch (error) {
+    console.error('Add media error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // PATCH /:id - Approve/update media
-router.patch('/:id', authenticate, [param('id').isInt()], async (req, res) => {
+router.patch('/:id', authenticate, authorize('super_admin', 'chief', 'media'), [param('id').isInt()], async (req, res) => {
   try {
     const [existing] = await pool.query('SELECT id FROM media WHERE id = ?', [req.params.id]);
     if (existing.length === 0) return res.status(404).json({ success: false, message: 'Not found' });
@@ -116,14 +147,19 @@ router.patch('/:id', authenticate, [param('id').isInt()], async (req, res) => {
 });
 
 // DELETE /:id
-router.delete('/:id', authenticate, [param('id').isInt()], async (req, res) => {
+router.delete('/:id', authenticate, authorize('super_admin', 'chief', 'media'), [param('id').isInt()], async (req, res) => {
   try {
     const fs = require('fs');
     const [existing] = await pool.query('SELECT * FROM media WHERE id = ?', [req.params.id]);
     if (existing.length === 0) return res.status(404).json({ success: false, message: 'Not found' });
 
-    const filePath = existing[0].file_path;
-    if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    // Remove the uploaded file too. Only files in the upload folder are ever removed
+    // ("/uploads/<name>"); pictures of the website itself and outside links are left alone.
+    const filePath = existing[0].file_path || '';
+    if (filePath.startsWith('/uploads/')) {
+      const onDisk = path.join(uploadDir, path.basename(filePath));
+      if (fs.existsSync(onDisk)) fs.unlinkSync(onDisk);
+    }
 
     await pool.query('DELETE FROM media WHERE id = ?', [req.params.id]);
     res.json({ success: true, message: 'Media deleted' });

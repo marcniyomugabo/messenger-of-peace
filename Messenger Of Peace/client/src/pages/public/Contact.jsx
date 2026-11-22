@@ -3,8 +3,12 @@ import { Container, Row, Col, Form, Button } from 'react-bootstrap'
 import { FiPhone, FiMessageCircle, FiMapPin, FiClock, FiMail, FiSend } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import api from '../../services/api'
+import { useSiteSettings, whatsappLink, phoneLink } from '../../utils/siteSettings'
 
 export default function Contact() {
+  // Contacts and meeting details come from the dashboard (Settings).
+  const site = useSiteSettings()
+  const locationLines = site.meeting_location.split(',').map(p => p.trim()).filter(Boolean)
   const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' })
   const [loading, setLoading] = useState(false)
 
@@ -52,7 +56,7 @@ export default function Contact() {
           <Row className="g-4 mb-5 animate-row">
             <Col md={4} className="animate-card">
               <a
-                href="https://wa.me/250722784670"
+                href={whatsappLink(site.whatsapp_contact)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-decoration-none"
@@ -60,7 +64,7 @@ export default function Contact() {
                 <div className="contact-card">
                   <FiMessageCircle className="contact-icon animate-float" />
                   <h5>WhatsApp</h5>
-                  <p className="text-muted mb-1">+250 722 784 670</p>
+                  <p className="text-muted mb-1">{site.whatsapp_contact}</p>
                   <small className="text-primary">Click to chat</small>
                 </div>
               </a>
@@ -69,14 +73,14 @@ export default function Contact() {
               <div className="contact-card">
                 <FiPhone className="contact-icon animate-float" />
                 <h5>Phone</h5>
-                <p className="text-muted mb-0">+250 786 188 913</p>
+                <p className="text-muted mb-0"><a href={phoneLink(site.phone_contact)} className="text-muted text-decoration-none">{site.phone_contact}</a></p>
               </div>
             </Col>
             <Col md={4} className="animate-card">
               <div className="contact-card">
                 <FiMail className="contact-icon animate-float" />
                 <h5>Email</h5>
-                <p className="text-muted mb-0">info@mopscouts.rw</p>
+                <p className="text-muted mb-0"><a href={'mailto:' + site.email_contact} className="text-muted text-decoration-none">{site.email_contact}</a></p>
               </div>
             </Col>
           </Row>
@@ -87,8 +91,7 @@ export default function Contact() {
                 <FiMapPin className="contact-icon animate-float" />
                 <h5>Location</h5>
                 <p className="text-muted mb-0">
-                  Camp Kigali<br />
-                  Nyarugenge District, Kigali City<br />
+                  {locationLines.map((line, i) => <span key={i}>{line}<br /></span>)}
                   Rwanda
                 </p>
               </div>
@@ -98,9 +101,9 @@ export default function Contact() {
                 <FiClock className="contact-icon animate-float" />
                 <h5>Meeting Time</h5>
                 <p className="text-muted mb-0">
-                  Every Sunday<br />
-                  13:30 - 16:30<br />
-                  Camp Kigali
+                  Every {site.meeting_day}<br />
+                  {site.meeting_time}<br />
+                  {locationLines[0]}
                 </p>
               </div>
             </Col>
@@ -109,9 +112,9 @@ export default function Contact() {
           {/* Contact Form */}
           <Row className="justify-content-center">
             <Col lg={8}>
-              <div className="mop-card animate-form">
+              <div className="mop-card mop-card-static animate-form">
                 <div className="card-header py-3">
-                  <h5 className="mb-0 text-white">Send Us a Message</h5>
+                  <h5 className="mb-0 text-white d-flex align-items-center gap-2"><FiMail aria-hidden="true" />Send Us a Message</h5>
                 </div>
                 <div className="card-body p-4">
                   <Form onSubmit={handleSubmit}>

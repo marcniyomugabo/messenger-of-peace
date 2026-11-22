@@ -1,85 +1,27 @@
 import { useState, useEffect } from 'react'
-import { Container, Row, Col, Badge } from 'react-bootstrap'
-import { FiAward, FiTrendingUp, FiTarget, FiDownload } from 'react-icons/fi'
+import { Container, Row, Col } from 'react-bootstrap'
+import { FiAward, FiTrendingUp, FiTarget } from 'react-icons/fi'
 import api from '../../services/api'
+import DocumentCard from '../../components/DocumentCard'
 
-const FALLBACK_PROJECTS = [
-  {
-    title: 'First Aid for Scouts',
-    category: 'Safety',
-    status: 'Published',
-    impact: 'Emergency preparedness training',
-    desc: 'First Aid training manual for scouts covering emergency response, wound care, and rescue techniques.',
-    file: '/portfolio/FIRST AID FOR SCOUTS.pptx',
-  },
-  {
-    title: 'Food for Life - Scouts Practical Guide',
-    category: 'Environment',
-    status: 'Published',
-    impact: 'Sustainable agriculture training',
-    desc: 'Training manual on soil health, organic inputs, and sustainable crop protection for scouts.',
-    file: '/portfolio/FOOD FOR LIFE- A SCOUTS\u2019 PRACTICAL GUIDE          Training Manual on Soil Health, Organic Inputs, and          Sustainable Crop Protection  .pdf',
-  },
-  {
-    title: 'Growth and Social Impact',
-    category: 'Education',
-    status: 'Published',
-    impact: 'Social impact awareness',
-    desc: 'RSA presentation on growth and social impact initiatives - October 2025.',
-    file: '/portfolio/Growth and Social Impact. RSA Oct 2025.pptx',
-  },
-  {
-    title: 'Working with Children and Young People',
-    category: 'Training',
-    status: 'Published',
-    impact: 'Youth development training',
-    desc: 'Guide for working effectively with children and young people in scouting activities.',
-    file: '/portfolio/WORKING WITH CHILDREN AND YOUNG PEOPLE (1).pptx',
-  },
-  {
-    title: "WOSM's Education Initiative",
-    category: 'Education',
-    status: 'Published',
-    impact: 'Global scouting education',
-    desc: "Presentation on WOSM's global education initiative for scouting organizations worldwide.",
-    file: "/portfolio/WOSM'S Education Initiative.pptx",
-  },
-  {
-    title: 'Scouting Activity Document',
-    category: 'Service',
-    status: 'Published',
-    impact: 'Community service resource',
-    desc: 'Additional scouting activity documentation and guidelines.',
-    file: '/portfolio/doc_1787157106_760.pdf',
-  },
-]
-
+// Every resource comes from the dashboard (Library); only Published ones are shown.
 export default function Portfolio() {
-  const [projects, setProjects] = useState(FALLBACK_PROJECTS)
+  const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
-    const fetchLibrary = async () => {
-      try {
-        const res = await api.get('/library')
-        if (res.data.success && res.data.data.length > 0) {
-          const apiProjects = res.data.data.map((r) => ({
-            title: r.title,
-            category: r.category || 'General',
-            status: r.status || 'Published',
-            impact: r.author || r.file_type || 'Resource',
-            desc: r.description || '',
-            file: r.file_path || '#',
-          }))
-          setProjects([...apiProjects, ...FALLBACK_PROJECTS])
-        }
-      } catch (err) {
-        // fallback already set
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchLibrary()
+    api.get('/library', { params: { limit: 100 } })
+      .then(res => setProjects((res.data.data || []).map((r) => ({
+        id: r.id,
+        title: r.title,
+        category: r.category || 'General',
+        impact: r.author ? `By ${r.author}` : '',
+        desc: r.description || '',
+        file: r.file_path || '',
+      }))))
+      .catch(() => setFailed(true))
+      .finally(() => setLoading(false))
   }, [])
 
   const categories = [...new Set(projects.map((p) => p.category))]
@@ -138,31 +80,21 @@ export default function Portfolio() {
               </div>
               <p className="mt-3 text-muted">Loading library resources...</p>
             </div>
+          ) : projects.length === 0 ? (
+            <p className="text-center text-muted py-5 mb-0">
+              {failed ? 'The library could not be loaded. Please try again later.' : 'New resources will appear here soon.'}
+            </p>
           ) : (
             <Row className="g-4 animate-row">
-              {projects.map((project, idx) => (
-                <Col lg={4} md={6} key={idx} className="animate-card">
-                  <div className="mop-card h-100">
-                    <div className="card-body d-flex flex-column">
-                      <div className="d-flex justify-content-between align-items-start mb-2">
-                        <Badge bg="success">
-                          {project.status}
-                        </Badge>
-                        <small className="text-muted">{project.category}</small>
-                      </div>
-                      <h5 className="mt-2">{project.title}</h5>
-                      <p className="text-muted small flex-grow-1">{project.desc}</p>
-                      <div className="d-flex align-items-center gap-2 mt-auto">
-                        <FiTrendingUp style={{ color: '#6B21A8' }} />
-                        <span className="fw-bold small" style={{ color: '#6B21A8' }}>
-                          {project.impact}
-                        </span>
-                      </div>
-                      <a className="btn btn-sm btn-primary mt-3" href={project.file} download>
-                        <FiDownload className="me-1" /> Download
-                      </a>
-                    </div>
-                  </div>
+              {projects.map((project) => (
+                <Col lg={4} md={6} key={project.id} className="animate-card">
+                  <DocumentCard
+                    title={project.title}
+                    category={project.category}
+                    subtitle={project.impact}
+                    description={project.desc}
+                    href={project.file ? encodeURI(project.file) : ''}
+                  />
                 </Col>
               ))}
             </Row>
