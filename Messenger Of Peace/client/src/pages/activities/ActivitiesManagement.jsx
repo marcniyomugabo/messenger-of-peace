@@ -169,8 +169,8 @@ export default function ActivitiesManagement() {
           </div>
         </Col>
         <Col md={3}>
-          <div className="kpi-card" style={{ borderLeftColor: '#16A34A' }}>
-            <div className="kpi-value" style={{ color: '#16A34A' }}>{published}</div>
+          <div className="kpi-card" style={{ borderLeftColor: 'var(--mop-success)' }}>
+            <div className="kpi-value" style={{ color: 'var(--mop-success)' }}>{published}</div>
             <div className="kpi-label">Published</div>
           </div>
         </Col>

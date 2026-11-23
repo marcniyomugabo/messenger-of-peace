@@ -1,27 +1,28 @@
+import { useState, useEffect } from 'react'
 import { Container, Row, Col } from 'react-bootstrap'
+import api from '../../services/api'
+
+// Shown when a leader has no photo (or no photo consent).
+const NO_PHOTO = '/images/logo-small.png'
 
 export default function Leadership() {
-  const chiefDeGroupe = {
-    name: 'Nshimiyimana Jackson',
-    role: 'Chief of Groupe',
-    image: '/images/leaders/board/chief.jpeg',
-    desc: 'Leading the Messengers of Peace Scout Group with dedication and vision. Overseeing all group activities and ensuring the achievement of scouting objectives.',
-  }
+  // Board members come from the dashboard (Board Members), in their website order;
+  // the first one (the Chief) is shown large above the others.
+  const [people, setPeople] = useState([])
 
-  const leaders = [
-    { name: 'Nkusi Jeanette', role: 'Deputy Chief', unit: 'All Units', image: '/images/leaders/board/deputy.PNG', desc: 'Supporting the Chief of Groupe in managing group operations and coordinating between units.' },
-    { name: 'Iradukunda Cyusa Samillah', role: 'Secretary', unit: 'Administration', image: '/images/leaders/board/secretary.PNG', desc: 'Managing group communications, records, and organizational documentation.' },
-    { name: 'Sugira Cammille', role: 'Deputy Secretary', unit: 'Administration', image: '/images/leaders/board/deputy-secretary.PNG', desc: 'Assisting the secretary in managing administrative tasks and documentation.' },
-    { name: 'Musinga', role: 'Chief of Disciplinary', unit: 'Discipline', image: '/images/leaders/board/musinga.JPEG', desc: 'Leading disciplinary efforts across all units, ensuring scouts uphold the highest standards of conduct.' },
-    { name: 'Uwineza Shella', role: 'Disciplinary', unit: 'Discipline', image: '/images/leaders/board/disciplinary-member.PNG', desc: 'Supporting disciplinary operations and maintaining order across the group.' },
-    { name: 'Munezero Yakin', role: 'Logistics', unit: 'Logistics', image: '/images/leaders/board/logistics.PNG', desc: 'Managing equipment, supplies, and logistics for all scouting events and expeditions.' },
-    { name: 'Wetu Ezekiel', role: 'Charge Spokesperson', unit: 'Communications', image: '/images/leaders/board/spokesperson-group.PNG', desc: 'Leading group communications and spokesperson operations, coordinating media relations and public representation.' },
-    { name: 'Ihirwe Richess', role: 'Spokesperson', unit: 'Communications', image: '/images/leaders/board/spokesperson.PNG', desc: 'Representing the group publicly and managing communications with media and partners.' },
-    { name: 'Uwabakurikiza Anitha', role: 'Social Affairs', unit: 'Social', image: '/images/leaders/board/socially.PNG', desc: 'Coordinating social activities and welfare programs for all group members.' },
-    { name: 'Uwase Chanella', role: 'Formatrice', unit: 'Training', image: '/images/leaders/board/formatrice.PNG', desc: 'Developing and delivering training programs to build scout skills and leadership abilities.' },
-    { name: 'Akijuru Belle Hervine', role: 'Board Member', unit: 'All Units', image: '/images/leaders/board/board1.PNG', desc: 'Supporting group governance and contributing to strategic planning and decision-making.' },
-    { name: 'Kwizera Prince', role: 'Board Member', unit: 'All Units', image: '/images/leaders/board/board2.PNG', desc: 'Contributing to group leadership and ensuring the achievement of scouting goals.' },
-  ]
+  useEffect(() => {
+    api.get('/leadership')
+      .then(res => setPeople((res.data.data || []).map(l => ({
+        name: (l.member_name || '').trim(),
+        role: l.position,
+        unit: l.unit_name || '',
+        image: l.member_photo || NO_PHOTO,
+        desc: l.description || '',
+      }))))
+      .catch(() => setPeople([]))
+  }, [])
+
+  const [chiefDeGroupe, ...leaders] = people
 
   return (
     <div>
@@ -46,6 +47,7 @@ export default function Leadership() {
       </section>
 
       {/* Chief of Groupe */}
+      {chiefDeGroupe && (
       <section className="py-5">
         <Container>
           <Row className="justify-content-center">
@@ -66,6 +68,7 @@ export default function Leadership() {
           </Row>
         </Container>
       </section>
+      )}
 
       {/* Board Members */}
       <section className="py-5" style={{ backgroundColor: '#f8f5ff' }}>
@@ -87,9 +90,11 @@ export default function Leadership() {
                   </div>
                   <h5 style={{ color: 'var(--mop-primary)' }}>{leader.name}</h5>
                   <span className="badge badge-mop mb-2">{leader.role}</span>
-                  <p className="small text-muted mb-1" style={{ color: 'var(--mop-secondary)' }}>
-                    {leader.unit}
-                  </p>
+                  {leader.unit && (
+                    <p className="small text-muted mb-1" style={{ color: 'var(--mop-secondary)' }}>
+                      {leader.unit}
+                    </p>
+                  )}
                   <p className="text-muted small mb-0">{leader.desc}</p>
                 </div>
               </Col>

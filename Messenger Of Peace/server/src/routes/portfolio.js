@@ -25,7 +25,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /pending
-router.get('/pending', authenticate, async (req, res) => {
+router.get('/pending', authenticate, authorize('super_admin', 'chief'), async (req, res) => {
   try {
     const [projects] = await pool.query(
       `SELECT pp.*, CONCAT(m.first_name, ' ', m.last_name) as creator_name
@@ -84,7 +84,7 @@ router.post(
 );
 
 // PUT /:id
-router.put('/:id', authenticate, [param('id').isInt()], async (req, res) => {
+router.put('/:id', authenticate, authorize('super_admin', 'chief'), [param('id').isInt()], async (req, res) => {
   try {
     const [existing] = await pool.query('SELECT id FROM portfolio_projects WHERE id = ?', [req.params.id]);
     if (existing.length === 0) return res.status(404).json({ success: false, message: 'Not found' });

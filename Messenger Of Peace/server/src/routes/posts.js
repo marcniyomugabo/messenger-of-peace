@@ -1,134 +1,164 @@
+// News (table "posts"). Written in the dashboard (News) by the super admin, chief and media;
+// only Published stories are public. A story's web address (slug) never changes after it is
+// created, so links shared on WhatsApp keep working even if the title is edited.
 const express = require('express');
 const router = express.Router();
-const { body, param, validationResult } = require('express-validator');
+const { body, param, query, validationResult } = require('express-validator');
 const pool = require('../config/db');
 const { authenticate, authorize } = require('../middleware/auth');
+const { logAction } = require('../utils/audit');
 
-// GET / - Public: published posts
-router.get('/', async (req, res) => {
-  try {
-    const { category, search, page = 1, limit = 10 } = req.query;
-    const offset = (page - 1) * limit;
+const EDITORS = ['super_admin', 'chief', 'media'];
+const CATEGORIES = ['Group News', 'Activities & Camps', 'Youth Stories', 'Community Service', 'Achievements', 'Announcements'];
+const STATUSES = ['Draft', 'Published', 'Archived'];
 
-    let sql = 'SELECT p.* FROM posts p WHERE p.status = ?';
-    const params = ['Published'];
+// A picture is an uploaded file (/uploads/...), a picture of the site (/images/...) or an https address.
+const isSafePicture = v => /^\/(uploads|images)\/[^\s"'()<>\\]+$/.test(v) || /^https:\/\/[^\s"'()<>\\]+$/i.test(v);
 
-    if (category) { sql += ' AND p.category = ?'; params.push(category); }
-    if (search) { sql += ' AND (p.title LIKE ? OR p.content LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
+const toSlug = (title) => String(title).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'story';
 
-    sql += ' ORDER BY p.published_at DESC, p.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
-
-    const [posts] = await pool.query(sql, params);
-    res.json({ success: true, data: posts });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error' });
+async function uniqueSlug(title) {
+  const base = toSlug(title);
+  for (let n = 1; ; n++) {
+    const slug = n === 1 ? base : `${base}-${n}`;
+    const [rows] = await pool.query('SELECT id FROM posts WHERE slug = ?', [slug]);
+    if (rows.length === 0) return slug;
   }
-});
+}
 
-// GET /admin - All posts (authenticated)
-router.get('/admin', authenticate, async (req, res) => {
+const storyRules = (creating) => [
+  (creating ? body('title') : body('title').optional()).trim().isLength({ min: 3, max: 200 }).withMessage('Title must be 3 to 200 characters'),
+  (creating ? body('content') : body('content').optional()).trim().isLength({ min: 20, max: 50000 }).withMessage('The story text must be at least 20 characters'),
+  body('category').optional().isIn(CATEGORIES).withMessage('Unknown category'),
+  body('status').optional().isIn(STATUSES).withMessage('Unknown status'),
+  body('excerpt').optional({ values: 'falsy' }).trim().isLength({ max: 300 }).withMessage('The summary must be 300 characters or less'),
+  body('featured_image').optional({ values: 'falsy' }).trim().custom(isSafePicture).withMessage('The picture must be uploaded, or an https:// address'),
+  body('published_at').optional({ values: 'falsy' }).isISO8601().withMessage('Publish date must be a date'),
+];
+
+const LIST_FIELDS = 'p.id, p.title, p.slug, p.excerpt, p.category, p.featured_image, p.published_at';
+
+// GET /api/posts - published stories, newest first (?category=&search=&page=&limit=)
+router.get('/', [
+  query('page').optional().isInt({ min: 1 }),
+  query('limit').optional().isInt({ min: 1, max: 50 }),
+], async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
-    const offset = (page - 1) * limit;
-
-    let sql = 'SELECT p.* FROM posts p WHERE 1=1';
+    const page = Number(req.query.page) || 1;
+    const limit = Math.min(Number(req.query.limit) || 9, 50);
+    const where = ["p.status = 'Published'", 'p.published_at <= NOW()'];
     const params = [];
-    if (status) { sql += ' AND p.status = ?'; params.push(status); }
-
-    sql += ' ORDER BY p.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
-
-    const [posts] = await pool.query(sql, params);
-    res.json({ success: true, data: posts });
+    if (req.query.category) { where.push('p.category = ?'); params.push(String(req.query.category)); }
+    if (req.query.search) {
+      const s = `%${String(req.query.search).slice(0, 100)}%`;
+      where.push('(p.title LIKE ? OR p.excerpt LIKE ? OR p.content LIKE ?)');
+      params.push(s, s, s);
+    }
+    const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM posts p WHERE ${where.join(' AND ')}`, params);
+    const [rows] = await pool.query(
+      `SELECT ${LIST_FIELDS} FROM posts p WHERE ${where.join(' AND ')}
+       ORDER BY p.published_at DESC, p.id DESC LIMIT ? OFFSET ?`,
+      [...params, limit, (page - 1) * limit]
+    );
+    res.json({ success: true, data: rows, total, page, categories: CATEGORIES });
   } catch (error) {
+    console.error('News list error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
-// GET /:slug
+// GET /api/posts/admin - every story, for the dashboard
+router.get('/admin', authenticate, authorize(...EDITORS), async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT p.*, u.email AS author_email FROM posts p LEFT JOIN users u ON u.id = p.created_by
+       ORDER BY (p.status = 'Archived'), COALESCE(p.published_at, p.created_at) DESC`
+    );
+    res.json({ success: true, data: rows, categories: CATEGORIES });
+  } catch (error) {
+    console.error('News admin list error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// GET /api/posts/:slug - one published story
 router.get('/:slug', async (req, res) => {
   try {
-    const [posts] = await pool.query('SELECT * FROM posts WHERE slug = ? AND status = ?', [req.params.slug, 'Published']);
-    if (posts.length === 0) return res.status(404).json({ success: false, message: 'Post not found' });
-    res.json({ success: true, data: posts[0] });
+    const [[post]] = await pool.query(
+      `SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.category, p.featured_image, p.published_at
+       FROM posts p WHERE p.slug = ? AND p.status = 'Published' AND p.published_at <= NOW()`,
+      [req.params.slug]
+    );
+    if (!post) return res.status(404).json({ success: false, message: 'Story not found' });
+    res.json({ success: true, data: post });
   } catch (error) {
+    console.error('News story error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
-// POST /
-router.post('/', authenticate, [body('title').notEmpty(), body('content').notEmpty()], async (req, res) => {
+// POST /api/posts - new story
+router.post('/', authenticate, authorize(...EDITORS), storyRules(true), async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ success: false, message: errors.array()[0].msg });
-
-    const { title, content, excerpt, category, featured_image, status, seo_title, seo_description } = req.body;
-    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-
-    const [existingSlug] = await pool.query('SELECT id FROM posts WHERE slug = ?', [slug]);
-    const finalSlug = existingSlug.length > 0 ? `${slug}-${Date.now()}` : slug;
-
-    const postStatus = status || 'Draft';
-    const publishedAt = postStatus === 'Published' ? new Date() : null;
-
+    const b = req.body;
+    const status = b.status || 'Draft';
+    const slug = await uniqueSlug(b.title);
+    // A published story gets today's date unless an earlier date is given (e.g. last month's camp).
+    const publishedAt = b.published_at ? new Date(b.published_at) : (status === 'Published' ? new Date() : null);
     const [result] = await pool.query(
-      `INSERT INTO posts (title, slug, content, excerpt, category, featured_image, status, published_at, seo_title, seo_description, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [title, finalSlug, content, excerpt || null, category || null, featured_image || null,
-       postStatus, publishedAt, seo_title || null, seo_description || null, req.user.id]
+      `INSERT INTO posts (title, slug, content, excerpt, category, featured_image, status, published_at, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [b.title, slug, b.content, b.excerpt || null, b.category || CATEGORIES[0], b.featured_image || null, status, publishedAt, req.user.id]
     );
-
-    const [newPost] = await pool.query('SELECT * FROM posts WHERE id = ?', [result.insertId]);
-    res.status(201).json({ success: true, message: 'Post created', data: newPost[0] });
+    const [[post]] = await pool.query('SELECT * FROM posts WHERE id = ?', [result.insertId]);
+    await logAction(req, 'news.created', 'news', post.id, { new: { title: post.title, status: post.status } });
+    res.status(201).json({ success: true, message: 'Story saved', data: post });
   } catch (error) {
-    console.error('Create post error:', error);
+    console.error('Create story error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
-// PUT /:id
-router.put('/:id', authenticate, [param('id').isInt()], async (req, res) => {
+// PUT /api/posts/:id - edit a story (its web address stays the same)
+router.put('/:id', authenticate, authorize(...EDITORS), [param('id').isInt(), ...storyRules(false)], async (req, res) => {
   try {
-    const [existing] = await pool.query('SELECT id FROM posts WHERE id = ?', [req.params.id]);
-    if (existing.length === 0) return res.status(404).json({ success: false, message: 'Not found' });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, message: errors.array()[0].msg });
+    const [[before]] = await pool.query('SELECT * FROM posts WHERE id = ?', [req.params.id]);
+    if (!before) return res.status(404).json({ success: false, message: 'Story not found' });
 
-    const { title, content, excerpt, category, featured_image, status, seo_title, seo_description } = req.body;
+    const b = req.body;
     const fields = [];
     const params = [];
-
-    if (title !== undefined) {
-      fields.push('title = ?', 'slug = ?');
-      params.push(title, title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
+    for (const f of ['title', 'content', 'excerpt', 'category', 'featured_image', 'status']) {
+      if (b[f] !== undefined) { fields.push(`${f} = ?`); params.push(b[f] === '' && ['excerpt', 'featured_image'].includes(f) ? null : b[f]); }
     }
-    if (content !== undefined) { fields.push('content = ?'); params.push(content); }
-    if (excerpt !== undefined) { fields.push('excerpt = ?'); params.push(excerpt); }
-    if (category !== undefined) { fields.push('category = ?'); params.push(category); }
-    if (featured_image !== undefined) { fields.push('featured_image = ?'); params.push(featured_image); }
-    if (status !== undefined) {
-      fields.push('status = ?'); params.push(status);
-      if (status === 'Published') fields.push('published_at = COALESCE(published_at, NOW())');
-    }
-    if (seo_title !== undefined) { fields.push('seo_title = ?'); params.push(seo_title); }
-    if (seo_description !== undefined) { fields.push('seo_description = ?'); params.push(seo_description); }
+    if (b.published_at) { fields.push('published_at = ?'); params.push(new Date(b.published_at)); }
+    else if (b.status === 'Published' && !before.published_at) fields.push('published_at = NOW()');
+    if (fields.length === 0) return res.status(400).json({ success: false, message: 'Nothing to save' });
 
-    if (fields.length === 0) return res.status(400).json({ success: false, message: 'No fields' });
-    params.push(req.params.id);
-    await pool.query(`UPDATE posts SET ${fields.join(', ')} WHERE id = ?`, params);
-
-    const [updated] = await pool.query('SELECT * FROM posts WHERE id = ?', [req.params.id]);
-    res.json({ success: true, message: 'Post updated', data: updated[0] });
+    await pool.query(`UPDATE posts SET ${fields.join(', ')} WHERE id = ?`, [...params, req.params.id]);
+    const [[post]] = await pool.query('SELECT * FROM posts WHERE id = ?', [req.params.id]);
+    await logAction(req, 'news.updated', 'news', post.id, { old: { title: before.title, status: before.status }, new: { title: post.title, status: post.status } });
+    res.json({ success: true, message: 'Story saved', data: post });
   } catch (error) {
+    console.error('Update story error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
-// DELETE /:id
+// DELETE /api/posts/:id - archive (hidden from the site, kept in the dashboard)
 router.delete('/:id', authenticate, authorize('super_admin', 'chief'), [param('id').isInt()], async (req, res) => {
   try {
-    await pool.query('UPDATE posts SET status = ? WHERE id = ?', ['Archived', req.params.id]);
-    res.json({ success: true, message: 'Post archived' });
+    const [result] = await pool.query("UPDATE posts SET status = 'Archived' WHERE id = ?", [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Story not found' });
+    await logAction(req, 'news.archived', 'news', Number(req.params.id));
+    res.json({ success: true, message: 'Story archived' });
   } catch (error) {
+    console.error('Archive story error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

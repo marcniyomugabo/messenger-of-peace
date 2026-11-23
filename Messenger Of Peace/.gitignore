@@ -12,6 +12,9 @@ build/
 .env.*
 !.env.example
 
+# Files uploaded through the dashboard (created by the server at runtime)
+server/src/uploads/
+
 # Logs
 logs
 *.log

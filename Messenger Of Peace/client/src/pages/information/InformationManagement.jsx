@@ -4,26 +4,6 @@ import { FiPlus, FiEdit2, FiTrash2, FiFileText, FiUploadCloud, FiDownload } from
 import { toast } from 'react-toastify'
 import api from '../../services/api'
 
-const INFORMATION_DOCUMENTS = [
-  { id: 1, title: 'FA Posters Rwanda', description: 'First Aid posters for Rwanda scouting activities.', category: 'Safety', fileName: '2020_032_Posters-FA_A2_Rwanda_RW_LR.pdf', file: '/information/2020_032_Posters-FA_A2_Rwanda_RW_LR.pdf' },
-  { id: 2, title: 'ABAHIZI Draft 4', description: 'ABAHIZI draft document - version 4.', category: 'Guide', fileName: '3. ABAHIZI  -DRAFT 4.pdf', file: '/information/3. ABAHIZI  -DRAFT 4.pdf' },
-  { id: 3, title: 'ABAHIZI Volume 3 Edition 2', description: 'ABAHIZI publication volume 3, edition 2.', category: 'Guide', fileName: 'ABAHIZI  Vol3,ed2.pdf.pdf', file: '/information/ABAHIZI%20%20Vol3,ed2.pdf.pdf' },
-  { id: 4, title: 'Counselling Guide', description: 'Counselling guide for scout leaders and members.', category: 'Training', fileName: 'Consouling.pdf', file: '/information/Consouling.pdf' },
-  { id: 5, title: 'Religious Dimension of Scouting Pedagogy', description: 'Exploring the religious and spiritual dimensions of the scouting educational method.', category: 'Guide', fileName: 'DIMENSION-RELIGIEUSE-DE-LA-PEDAGOGIE-SCOUTE (1).pdf', file: '/information/DIMENSION-RELIGIEUSE-DE-LA-PEDAGOGIE-SCOUTE (1).pdf' },
-  { id: 6, title: 'Growth and Social Impact', description: 'RSA presentation on growth and social impact - October 2025.', category: 'Training', fileName: 'Growth and Social Impact. RSA Oct 2025 - Copy.pptx', file: '/information/Growth and Social Impact. RSA Oct 2025 - Copy.pptx' },
-  { id: 7, title: 'GUTEGURA IGIKORWA', description: 'GUTEGURA IGIKORWA operational guide.', category: 'Service', fileName: 'GUTEGURA IGIKORWA (1).doc', file: '/information/GUTEGURA IGIKORWA (1).doc' },
-  { id: 8, title: 'Ifirimbi', description: 'Ifirimbi scouting publication.', category: 'Official', fileName: 'ifirimbi.pdf', file: '/information/ifirimbi.pdf' },
-  { id: 9, title: 'Heritage from the Liberation War', description: 'Discussion on heritage from the liberation war and stopping genocide.', category: 'Official', fileName: 'Ikiganiro umurage tuvoma mu rugamba rwo kubohora u Rwanda, guhagarika jenoside(2).pdf', file: '/information/Ikiganiro umurage tuvoma mu rugamba rwo kubohora u Rwanda, guhagarika jenoside(2).pdf' },
-  { id: 10, title: 'Ikoraniro', description: 'Ikoraniro scouting activity guide.', category: 'Skills', fileName: 'ikoraniro.pdf', file: '/information/ikoraniro.pdf' },
-  { id: 11, title: 'Les Journees Mondiales (Copy)', description: 'World days reference document - copy version.', category: 'Official', fileName: 'LES JOURNEES MONDIALES - Copy.docx', file: '/information/LES JOURNEES MONDIALES - Copy.docx' },
-  { id: 12, title: 'Les Journees Mondiales', description: 'World days official document.', category: 'Official', fileName: 'LES JOURNEES MONDIALES.docx', file: '/information/LES JOURNEES MONDIALES.docx' },
-  { id: 13, title: 'Rover Guidelines EN', description: 'Rover scout guidelines - English version.', category: 'Guide', fileName: 'Rover Guidelines EN (1).pdf', file: '/information/Rover Guidelines EN (1).pdf' },
-  { id: 14, title: 'Rover Guidelines', description: 'Rover scout official guidelines.', category: 'Guide', fileName: 'Rover Guidelines EN.pdf', file: '/information/Rover Guidelines EN.pdf' },
-  { id: 15, title: 'Youth Programme Educational Activities', description: 'Session guide for educational activities within the Youth Programme.', category: 'Training', fileName: 'Session -Educ Activities  (Youth Programme).pdf', file: '/information/Session -Educ Activities  (Youth Programme).pdf' },
-  { id: 16, title: 'Urubuto Protocol Agency Concept Note', description: 'Concept note for the Urubuto Protocol Agency initiative.', category: 'Service', fileName: 'urubuto_protocol_agency_concept_note.pdf', file: '/information/urubuto_protocol_agency_concept_note.pdf' },
-  { id: 17, title: 'World Days Calendar', description: 'Complete calendar of international and scouting world days.', category: 'Official', fileName: 'World_Days_Calendar_Full.pdf', file: '/information/World_Days_Calendar_Full.pdf' },
-]
-
 export default function InformationManagement() {
   const [documents, setDocuments] = useState([])
   const [showModal, setShowModal] = useState(false)
@@ -38,10 +18,14 @@ export default function InformationManagement() {
 
   const fetchDocuments = async () => {
     try {
-      const res = await api.get('/information')
-      setDocuments(res.data.data || INFORMATION_DOCUMENTS)
+      // Only what is really saved (drafts included), with the server's field names.
+      const res = await api.get('/information/admin')
+      setDocuments((res.data.data || []).map(d => ({
+        ...d, fileName: d.file_name || '', file: d.file_path ? encodeURI(d.file_path) : '',
+      })))
     } catch {
-      setDocuments(INFORMATION_DOCUMENTS)
+      toast.error('Could not load documents')
+      setDocuments([])
     } finally {
       setLoading(false)
     }
@@ -85,17 +69,8 @@ export default function InformationManagement() {
         setEditItem(null)
         fetchDocuments()
       }
-    } catch {
-      if (!editItem) {
-        setDocuments([{ id: Date.now(), ...form, file: `/information/${form.fileName}`, date: new Date().toISOString().split('T')[0] }, ...documents])
-        toast.success('Document added')
-      } else {
-        setDocuments(documents.map(d => d.id === editItem.id ? { ...d, ...form } : d))
-        toast.success('Document updated')
-      }
-      setShowModal(false)
-      setForm({ title: '', description: '', category: 'Guide', fileName: '' })
-      setEditItem(null)
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not save the document')
     } finally {
       setUploading(false)
     }
@@ -111,12 +86,11 @@ export default function InformationManagement() {
     if (!window.confirm('Delete this document?')) return
     try {
       await api.delete(`/information/${id}`)
-      toast.success('Deleted')
-    } catch {
-      // silent
+      toast.success('Document deleted')
+      fetchDocuments()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not delete the document')
     }
-    setDocuments(documents.filter(d => d.id !== id))
-    toast.success('Document deleted')
   }
 
   const categoryBadge = (cat) => {

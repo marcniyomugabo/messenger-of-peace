@@ -4,27 +4,24 @@ const { body, param, validationResult } = require('express-validator');
 const pool = require('../config/db');
 const { authenticate, authorize } = require('../middleware/auth');
 
-// GET / - Public: published events
+// What the public may see of an event. Never the budget, organizer notes or who created it,
+// and never the participants (they are children).
+const PUBLIC_FIELDS = 'e.id, e.title, e.category, e.description, e.venue, e.start_date, e.end_date, e.status';
+// Drafts are private; Published, Ongoing, Completed and Cancelled events are shown.
+const PUBLIC_WHERE = "e.status <> 'Draft'";
+
+// GET / - Public events. ?when=upcoming (not ended yet, soonest first) or ?when=past (newest first).
 router.get('/', async (req, res) => {
   try {
-    const { category, upcoming, page = 1, limit = 20 } = req.query;
-    const offset = (page - 1) * limit;
-
-    let sql = `SELECT e.*, COUNT(ep.id) as registered_count FROM events e
-       LEFT JOIN event_participants ep ON e.id = ep.event_id
-       WHERE e.status = 'Published'`;
-    const params = [];
-
-    if (upcoming === 'true') sql += ' AND e.start_date >= NOW()';
-    if (category) { sql += ' AND e.category = ?'; params.push(category); }
-
-    sql += ' GROUP BY e.id ORDER BY e.start_date DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
-
-    const [events] = await pool.query(sql, params);
-    const [countResult] = await pool.query("SELECT COUNT(*) as total FROM events WHERE status = 'Published'");
-
-    res.json({ success: true, data: { events, total: countResult[0].total } });
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), 100);
+    // Counted by day: an event stays "upcoming" for the whole day it ends.
+    const ends = 'DATE(COALESCE(e.end_date, e.start_date))';
+    let where = PUBLIC_WHERE;
+    let order = 'e.start_date ASC';
+    if (req.query.when === 'upcoming') where += ` AND ${ends} >= CURDATE()`;
+    if (req.query.when === 'past') { where += ` AND ${ends} < CURDATE()`; order = 'e.start_date DESC'; }
+    const [events] = await pool.query(`SELECT ${PUBLIC_FIELDS} FROM events e WHERE ${where} ORDER BY ${order} LIMIT ?`, [limit]);
+    res.json({ success: true, data: events });
   } catch (error) {
     console.error('Events list error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -32,7 +29,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /admin - All events (authenticated)
-router.get('/admin', authenticate, async (req, res) => {
+router.get('/admin', authenticate, authorize('super_admin', 'chief', 'secretary'), async (req, res) => {
   try {
     const { status, category, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
@@ -54,20 +51,30 @@ router.get('/admin', authenticate, async (req, res) => {
   }
 });
 
-// GET /:id
-router.get('/:id', async (req, res) => {
+// GET /:id - one public event (no drafts, no participants)
+router.get('/:id', [param('id').isInt()], async (req, res) => {
   try {
-    const [events] = await pool.query('SELECT * FROM events WHERE id = ?', [req.params.id]);
-    if (events.length === 0) return res.status(404).json({ success: false, message: 'Event not found' });
+    if (!validationResult(req).isEmpty()) return res.status(404).json({ success: false, message: 'Event not found' });
+    const [[event]] = await pool.query(`SELECT ${PUBLIC_FIELDS} FROM events e WHERE e.id = ? AND ${PUBLIC_WHERE}`, [req.params.id]);
+    if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
+    res.json({ success: true, data: event });
+  } catch (error) {
+    console.error('Event error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
 
+// GET /:id/participants - who takes part (staff only: these are children's names)
+router.get('/:id/participants', authenticate, authorize('super_admin', 'chief', 'secretary', 'unit_leader'), [param('id').isInt()], async (req, res) => {
+  try {
     const [participants] = await pool.query(
       `SELECT ep.*, CONCAT(m.first_name, ' ', m.last_name) as member_name
        FROM event_participants ep LEFT JOIN members m ON ep.member_id = m.id
        WHERE ep.event_id = ?`, [req.params.id]
     );
-
-    res.json({ success: true, data: { ...events[0], participants } });
+    res.json({ success: true, data: participants });
   } catch (error) {
+    console.error('Event participants error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -121,7 +128,7 @@ router.put(
       if (description !== undefined) { fields.push('description = ?'); params.push(description); }
       if (venue !== undefined) { fields.push('venue = ?'); params.push(venue); }
       if (start_date !== undefined) { fields.push('start_date = ?'); params.push(start_date); }
-      if (end_date !== undefined) { fields.push('end_date = ?'); params.push(end_date); }
+      if (end_date !== undefined) { fields.push('end_date = ?'); params.push(end_date || null); }
       if (organizer !== undefined) { fields.push('organizer = ?'); params.push(organizer); }
       if (budget !== undefined) { fields.push('budget = ?'); params.push(budget); }
       if (status !== undefined) { fields.push('status = ?'); params.push(status); }

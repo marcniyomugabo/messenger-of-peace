@@ -4,6 +4,15 @@ const { body, param, validationResult } = require('express-validator');
 const pool = require('../config/db');
 const { authenticate, authorize } = require('../middleware/auth');
 
+// A slide's picture and button link must be a path on this site ("/images/bg2.jpeg", "/about")
+// or a full web address. Anything else (for example "javascript:..." or text with quotes or
+// brackets, which could break out of the page's style) is refused.
+const isSafeLink = (value) => /^\/(?!\/)[^\s"'()<>\\]*$/.test(value) || /^https?:\/\/[^\s"'()<>\\]+$/i.test(value);
+const slideRules = [
+  body(['background_image', 'button_link']).optional({ values: 'falsy' }).trim()
+    .custom(isSafeLink).withMessage('Picture and button link must start with "/" or with http:// or https://'),
+];
+
 // GET /slides - Public: active slides
 router.get('/slides', async (req, res) => {
   try {
@@ -37,7 +46,7 @@ router.get('/sections', async (req, res) => {
 });
 
 // GET /slides/admin - All slides (authenticated)
-router.get('/slides/admin', authenticate, async (req, res) => {
+router.get('/slides/admin', authenticate, authorize('super_admin', 'chief', 'media'), async (req, res) => {
   try {
     const [slides] = await pool.query('SELECT * FROM hero_slides ORDER BY sort_order ASC');
     res.json({ success: true, data: slides });
@@ -48,7 +57,7 @@ router.get('/slides/admin', authenticate, async (req, res) => {
 });
 
 // GET /sections/admin - All sections (authenticated)
-router.get('/sections/admin', authenticate, async (req, res) => {
+router.get('/sections/admin', authenticate, authorize('super_admin', 'chief', 'media'), async (req, res) => {
   try {
     const [sections] = await pool.query('SELECT * FROM homepage_sections ORDER BY sort_order ASC');
     res.json({ success: true, data: sections });
@@ -63,7 +72,7 @@ router.post(
   '/slides',
   authenticate,
   authorize('super_admin', 'chief'),
-  [body('title').notEmpty().withMessage('Title is required')],
+  [body('title').trim().notEmpty().withMessage('Title is required'), ...slideRules],
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -95,9 +104,12 @@ router.put(
   '/slides/:id',
   authenticate,
   authorize('super_admin', 'chief'),
-  [param('id').isInt()],
+  [param('id').isInt(), body('title').optional().trim().notEmpty().withMessage('Title is required'), ...slideRules],
   async (req, res) => {
     try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ success: false, message: errors.array()[0].msg });
+
       const [existing] = await pool.query('SELECT id FROM hero_slides WHERE id = ?', [req.params.id]);
       if (existing.length === 0) return res.status(404).json({ success: false, message: 'Slide not found' });
 

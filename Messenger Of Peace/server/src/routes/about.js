@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /admin - All content (authenticated)
-router.get('/admin', authenticate, async (req, res) => {
+router.get('/admin', authenticate, authorize('super_admin', 'chief', 'media'), async (req, res) => {
   try {
     const [content] = await pool.query(
       'SELECT * FROM about_content ORDER BY sort_order ASC'

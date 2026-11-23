@@ -4,6 +4,9 @@ const { body, validationResult } = require('express-validator');
 const pool = require('../config/db');
 const { authenticate, authorize } = require('../middleware/auth');
 const { sendEmail, contactMessageReceived } = require('../utils/email');
+const { notifyRoles, safely } = require('../utils/notify');
+
+const MESSAGE_READERS = ['super_admin', 'chief', 'secretary'];
 
 function computeStatus(row) {
   if (row.status) return row.status;
@@ -37,6 +40,14 @@ router.post('/', [
 
     sendEmail(process.env.ADMIN_EMAIL || 'admin@mopscouts.rw', `New Contact: ${subject}`, contactMessageReceived(name, subject)).catch(() => {});
 
+    // Bell alert for the leaders who read the messages (same roles as the list below).
+    await safely(notifyRoles(MESSAGE_READERS, {
+      title: 'New contact message',
+      message: `${String(name).slice(0, 80)} wrote: "${String(subject).slice(0, 120)}"`,
+      type: 'message',
+      link: '/dashboard/messages',
+    }), 'contact message');
+
     res.status(201).json({ success: true, data: msg });
   } catch (err) {
     console.error('Contact message error:', err.message);
@@ -44,7 +55,7 @@ router.post('/', [
   }
 });
 
-router.get('/', authenticate, async (req, res) => {
+router.get('/', authenticate, authorize('super_admin', 'chief', 'secretary'), async (req, res) => {
   try {
     const { status, search } = req.query;
     let sql = 'SELECT * FROM contact_messages WHERE 1=1';
@@ -71,7 +82,7 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
-router.get('/:id', authenticate, async (req, res) => {
+router.get('/:id', authenticate, authorize('super_admin', 'chief', 'secretary'), async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM contact_messages WHERE id = ?', [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Message not found' });
@@ -89,7 +100,7 @@ router.get('/:id', authenticate, async (req, res) => {
   }
 });
 
-router.patch('/:id', authenticate, async (req, res) => {
+router.patch('/:id', authenticate, authorize('super_admin', 'chief', 'secretary'), async (req, res) => {
   try {
     const { status } = req.body;
     const valid = ['Unread', 'Read', 'Replied', 'Archived'];
@@ -114,7 +125,7 @@ router.patch('/:id', authenticate, async (req, res) => {
   }
 });
 
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, authorize('super_admin', 'chief', 'secretary'), async (req, res) => {
   try {
     const [existing] = await pool.query('SELECT id FROM contact_messages WHERE id = ?', [req.params.id]);
     if (!existing.length) return res.status(404).json({ error: 'Message not found' });

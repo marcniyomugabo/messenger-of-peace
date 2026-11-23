@@ -80,20 +80,20 @@ export default function ContributionOverview() {
           </div>
         </Col>
         <Col md={3} sm={6}>
-          <div className="kpi-card h-100" style={{ borderLeftColor: '#16a34a' }}>
-            <div className="kpi-value" style={{ color: '#16a34a' }}>RWF {totalPaid.toLocaleString()}</div>
+          <div className="kpi-card h-100" style={{ borderLeftColor: 'var(--mop-success)' }}>
+            <div className="kpi-value" style={{ color: 'var(--mop-success)' }}>RWF {totalPaid.toLocaleString()}</div>
             <div className="kpi-label">Total Paid</div>
           </div>
         </Col>
         <Col md={3} sm={6}>
-          <div className="kpi-card h-100" style={{ borderLeftColor: '#dc2626' }}>
-            <div className="kpi-value" style={{ color: '#dc2626' }}>RWF {totalOutstanding.toLocaleString()}</div>
+          <div className="kpi-card h-100" style={{ borderLeftColor: 'var(--mop-danger)' }}>
+            <div className="kpi-value" style={{ color: 'var(--mop-danger)' }}>RWF {totalOutstanding.toLocaleString()}</div>
             <div className="kpi-label">Total Outstanding</div>
           </div>
         </Col>
         <Col md={3} sm={6}>
-          <div className="kpi-card h-100" style={{ borderLeftColor: '#dc2626' }}>
-            <div className="kpi-value" style={{ color: '#dc2626' }}>{membersWithMissed}</div>
+          <div className="kpi-card h-100" style={{ borderLeftColor: 'var(--mop-danger)' }}>
+            <div className="kpi-value" style={{ color: 'var(--mop-danger)' }}>{membersWithMissed}</div>
             <div className="kpi-label">Members With Missed Months</div>
           </div>
         </Col>
@@ -120,17 +120,17 @@ export default function ContributionOverview() {
             </thead>
             <tbody>
               {members.map((m, idx) => (
-                <tr key={m.member_id} style={m.outstanding > 0 ? { background: '#FEF2F2' } : {}}>
+                <tr key={m.member_id} style={m.outstanding > 0 ? { background: 'var(--mop-danger-bg)' } : {}}>
                   <td>{idx + 1}</td>
                   <td><code>{m.member_code}</code></td>
                   <td className="fw-semibold">{m.member_name}</td>
                   <td>{m.join_date}</td>
                   <td>{m.total_months}</td>
-                  <td style={{ color: '#16a34a', fontWeight: 600 }}>{m.paid_months}</td>
-                  <td style={{ color: m.unpaid_months > 0 ? '#dc2626' : '#6b7280', fontWeight: 600 }}>{m.unpaid_months}</td>
-                  <td style={{ color: m.partial_months > 0 ? '#f59e0b' : '#6b7280', fontWeight: 600 }}>{m.partial_months}</td>
+                  <td style={{ color: 'var(--mop-success)', fontWeight: 600 }}>{m.paid_months}</td>
+                  <td style={{ color: m.unpaid_months > 0 ? 'var(--mop-danger)' : '#6b7280', fontWeight: 600 }}>{m.unpaid_months}</td>
+                  <td style={{ color: m.partial_months > 0 ? 'var(--mop-warning)' : '#6b7280', fontWeight: 600 }}>{m.partial_months}</td>
                   <td className="fw-semibold">RWF {m.total_paid.toLocaleString()}</td>
-                  <td style={{ color: m.outstanding > 0 ? '#dc2626' : '#16a34a', fontWeight: 600 }}>RWF {m.outstanding.toLocaleString()}</td>
+                  <td style={{ color: m.outstanding > 0 ? 'var(--mop-danger)' : 'var(--mop-success)', fontWeight: 600 }}>RWF {m.outstanding.toLocaleString()}</td>
                   <td>{statusBadge(m.current_month_status)}</td>
                   <td>
                     <Link to={`/dashboard/member-contributions/${m.member_id}`} className="btn btn-outline-primary btn-sm" title="View Full History">

@@ -2,7 +2,27 @@ const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const pool = require('../config/db');
+const { today } = require('../utils/dates');
 const { authenticate, authorize } = require('../middleware/auth');
+const { logAction } = require('../utils/audit');
+const { notifyUsers, safely } = require('../utils/notify');
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+// Tell the member (if they have a login) that their payment was recorded.
+// paid: [{ month, year, amount }]
+async function notifyMemberPaid(memberId, paid) {
+  if (!paid.length) return;
+  const [[member]] = await pool.query('SELECT user_id FROM members WHERE id = ?', [memberId]);
+  if (!member?.user_id) return;
+  const total = paid.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const months = paid.map(p => `${MONTH_NAMES[p.month - 1] || p.month} ${p.year}`).join(', ');
+  await notifyUsers([member.user_id], {
+    title: 'Contribution recorded',
+    message: `Thank you! Your contribution for ${months} (${total.toLocaleString('en-US')} RWF) was recorded.`,
+    type: 'payment',
+  });
+}
 
 // Helper: get months between two dates
 function getMonthsBetween(startYear, startMonth, endYear, endMonth) {
@@ -101,13 +121,32 @@ router.get('/summary', authenticate, authorize('super_admin', 'chief', 'treasure
   }
 });
 
+// GET /me - the signed-in member's own contribution history (My profile).
+router.get('/me', authenticate, async (req, res) => {
+  try {
+    const [[member]] = await pool.query('SELECT * FROM members WHERE user_id = ? LIMIT 1', [req.user.id]);
+    if (!member) return res.json({ success: true, data: null });
+    res.json({ success: true, data: await contributionReport(member) });
+  } catch (error) {
+    console.error('My contributions error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // GET /member/:id - Full dynamic contribution history for a member
-router.get('/member/:id', authenticate, async (req, res) => {
+router.get('/member/:id', authenticate, authorize('super_admin', 'chief', 'treasurer', 'secretary'), async (req, res) => {
   try {
     const [members] = await pool.query('SELECT * FROM members WHERE id = ?', [req.params.id]);
     if (members.length === 0) return res.status(404).json({ success: false, message: 'Member not found' });
-    const member = members[0];
+    res.json({ success: true, data: await contributionReport(members[0]) });
+  } catch (error) {
+    console.error('Member contribution history error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
 
+// One member's months, payments and totals (used by /member/:id and /me).
+async function contributionReport(member) {
     const [settingsRows] = await pool.query('SELECT * FROM contribution_settings ORDER BY effective_from ASC');
     const settings = settingsRows.length > 0 ? settingsRows : [{ monthly_amount: 500, currency: 'RWF', effective_from: '2020-01-01' }];
 
@@ -123,19 +162,15 @@ router.get('/member/:id', authenticate, async (req, res) => {
     const unpaidMonths = history.filter(h => h.status === 'Unpaid').length;
     const missed = history.filter(h => h.status !== 'Paid');
 
-    res.json({ success: true, data: {
+    return {
       member: { id: member.id, first_name: member.first_name, last_name: member.last_name, member_code: member.member_code, join_date: member.join_date, monthly_contribution: member.monthly_contribution, unit_id: member.unit_id },
       history,
       total_paid: totalPaid, total_expected: totalExpected, outstanding: totalExpected - totalPaid,
       paid_months: paidMonths, partial_months: partialMonths, unpaid_months: unpaidMonths,
       rate: totalExpected > 0 ? Math.round((totalPaid / totalExpected) * 100) : 0,
       missed
-    }});
-  } catch (error) {
-    console.error('Member contribution history error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
+    };
+}
 
 // GET / - Monthly contributions list (for selected month)
 router.get('/', authenticate, authorize('super_admin', 'chief', 'treasurer', 'secretary'), async (req, res) => {
@@ -286,7 +321,7 @@ router.get('/missed', authenticate, authorize('super_admin', 'chief', 'treasurer
 });
 
 // GET /settings
-router.get('/settings', authenticate, async (req, res) => {
+router.get('/settings', authenticate, authorize('super_admin', 'chief', 'treasurer', 'secretary'), async (req, res) => {
   try {
     const [settings] = await pool.query('SELECT * FROM contribution_settings ORDER BY effective_from ASC');
     res.json({ success: true, data: settings[0] || { monthly_amount: 500, currency: 'RWF' } });
@@ -300,13 +335,14 @@ router.put('/settings', authenticate, authorize('super_admin', 'chief'), async (
   try {
     const { monthly_amount, currency } = req.body;
     if (!monthly_amount || monthly_amount <= 0) return res.status(400).json({ success: false, message: 'Invalid amount' });
-    const now = new Date().toISOString().split('T')[0];
+    const now = today();
     const [existing] = await pool.query('SELECT id FROM contribution_settings LIMIT 1');
     if (existing.length > 0) {
       await pool.query('UPDATE contribution_settings SET monthly_amount = ?, currency = ?, updated_at = NOW() WHERE id = ?', [monthly_amount, currency || 'RWF', existing[0].id]);
     } else {
       await pool.query('INSERT INTO contribution_settings (monthly_amount, currency, effective_from) VALUES (?, ?, ?)', [monthly_amount, currency || 'RWF', now]);
     }
+    await logAction(req, 'contribution_settings.updated', 'contributions', null, { new: { monthly_amount, currency: currency || 'RWF' } });
     res.json({ success: true, message: 'Settings updated' });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
@@ -373,8 +409,12 @@ router.post('/payments', authenticate, authorize('super_admin', 'chief', 'treasu
     const { member_id, contribution_month, contribution_year, amount, payment_method, payment_date, reference_number, notes } = req.body;
     const [result] = await pool.query(
       'INSERT INTO contribution_payments (contribution_id, member_id, amount, contribution_month, contribution_year, payment_method, payment_date, reference_number, notes, status, recorded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [null, member_id, amount, contribution_month, contribution_year, payment_method || 'Cash', payment_date || new Date().toISOString().split('T')[0], reference_number || null, notes || null, 'Completed', req.user.id]
+      [null, member_id, amount, contribution_month, contribution_year, payment_method || 'Cash', payment_date || today(), reference_number || null, notes || null, 'Completed', req.user.id]
     );
+    await logAction(req, 'payment.created', 'contributions', result.insertId, {
+      new: { member_id, amount, contribution_month, contribution_year, payment_method: payment_method || 'Cash', reference_number: reference_number || null },
+    });
+    await safely(notifyMemberPaid(member_id, [{ month: Number(contribution_month), year: contribution_year, amount }]), 'contribution recorded');
     res.status(201).json({ success: true, message: 'Payment recorded', data: { id: result.insertId } });
   } catch (error) {
     console.error('Record payment error:', error);
@@ -390,15 +430,19 @@ router.post('/payments/multi', authenticate, authorize('super_admin', 'chief', '
       return res.status(400).json({ success: false, message: 'member_id and months array required' });
     }
     let created = 0;
+    const paid = [];
     for (const m of months) {
       const { month, year, amount } = m;
       if (!month || !year || !amount) continue;
       await pool.query(
         'INSERT INTO contribution_payments (contribution_id, member_id, amount, contribution_month, contribution_year, payment_method, payment_date, reference_number, notes, status, recorded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [null, member_id, amount, month, year, payment_method || 'Cash', payment_date || new Date().toISOString().split('T')[0], reference_number || null, notes || null, 'Completed', req.user.id]
+        [null, member_id, amount, month, year, payment_method || 'Cash', payment_date || today(), reference_number || null, notes || null, 'Completed', req.user.id]
       );
       created++;
+      paid.push({ month: Number(month), year, amount });
     }
+    await logAction(req, 'payment.created', 'contributions', null, { new: { member_id, months, created, payment_method: payment_method || 'Cash' } });
+    await safely(notifyMemberPaid(member_id, paid), 'contributions recorded');
     res.status(201).json({ success: true, message: `${created} payments recorded`, data: { created } });
   } catch (error) {
     console.error('Multi payment error:', error);
@@ -422,6 +466,9 @@ router.put('/payments/:id', authenticate, authorize('super_admin', 'chief', 'tre
     fields.push('updated_at = NOW()');
     params.push(req.params.id);
     await pool.query(`UPDATE contribution_payments SET ${fields.join(', ')} WHERE id = ?`, params);
+    await logAction(req, 'payment.updated', 'contributions', Number(req.params.id), {
+      old: existing[0], new: { amount, payment_method, payment_date, reference_number, notes },
+    });
     res.json({ success: true, message: 'Payment updated' });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
@@ -434,6 +481,7 @@ router.patch('/payments/:id/cancel', authenticate, authorize('super_admin', 'chi
     const [existing] = await pool.query('SELECT * FROM contribution_payments WHERE id = ? AND status != ?', [req.params.id, 'Cancelled']);
     if (existing.length === 0) return res.status(404).json({ success: false, message: 'Payment not found' });
     await pool.query('UPDATE contribution_payments SET status = ?, updated_at = NOW() WHERE id = ?', ['Cancelled', req.params.id]);
+    await logAction(req, 'payment.cancelled', 'contributions', Number(req.params.id), { old: existing[0], new: { status: 'Cancelled' } });
     res.json({ success: true, message: 'Payment cancelled' });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });

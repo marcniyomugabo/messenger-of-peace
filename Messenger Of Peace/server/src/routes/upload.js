@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
 // POST /upload - Generic file upload for library, information, etc.
-router.post('/', authenticate, upload.single('file'), async (req, res) => {
+router.post('/', authenticate, authorize('super_admin', 'chief', 'media'), upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
     res.status(201).json({

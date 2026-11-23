@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Table, Button, Modal, Badge, Row, Col, Form } from 'react-bootstrap'
-import { FiCheck, FiX, FiEye, FiUserPlus } from 'react-icons/fi'
+import { FiCheck, FiX, FiEye, FiUserPlus, FiCopy } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import api from '../../services/api'
+import { ageOn } from '../../utils/date'
 
 const UNIT_MAP = {
   abatoni: { name: 'Abatoni', color: '#6B21A8' },
@@ -19,6 +20,8 @@ export default function ApplicationsManagement() {
   const [reviewNotes, setReviewNotes] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [search, setSearch] = useState('')
+  // Login details of a just-approved member; the server sends the password only once.
+  const [newLogin, setNewLogin] = useState(null)
 
   useEffect(() => { fetchApplications() }, [])
 
@@ -35,12 +38,25 @@ export default function ApplicationsManagement() {
     const label = status === 'Approved' ? 'approve' : 'reject'
     if (!window.confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} ${app.first_name} ${app.second_name}'s application?`)) return
     try {
-      await api.patch(`/member-applications/${app.id}/review`, { status, notes: reviewNotes || null })
+      const res = await api.patch(`/member-applications/${app.id}/review`, { status, notes: reviewNotes || null })
       setApplications(applications.map(a => a.id === app.id ? { ...a, status } : a))
-      toast.success(`Application ${label}d`)
+      const emailedTo = res.data.data?.emailed_to
+      toast.success(`Application ${label}d` + (emailedTo ? ` - email sent to ${emailedTo}` : ''))
       setShowModal(false)
       setReviewNotes('')
+      const login = res.data.data?.login
+      if (login) setNewLogin({ name: `${app.first_name} ${app.second_name}`, ...login, emailedTo })
     } catch { toast.error(`Failed to ${label}`) }
+  }
+
+  const copyLogin = async () => {
+    const text = `Messengers of Peace login\nEmail: ${newLogin.email}\nTemporary password: ${newLogin.temporary_password}`
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success('Login details copied')
+    } catch {
+      toast.error('Could not copy - please write the details down')
+    }
   }
 
   const statusBadge = (status) => {
@@ -158,7 +174,10 @@ export default function ApplicationsManagement() {
               <Col md={6}>
                 <h6 className="fw-bold" style={{ color: '#6B21A8' }}>Personal Information</h6>
                 <p className="mb-1"><strong>Name:</strong> {selected.first_name} {selected.second_name}</p>
+                {selected.gender && <p className="mb-1"><strong>Gender:</strong> {selected.gender}</p>}
+                {selected.date_of_birth && <p className="mb-1"><strong>Date of birth:</strong> {selected.date_of_birth} ({ageOn(selected.date_of_birth)} years)</p>}
                 <p className="mb-1"><strong>Phone:</strong> {selected.phone}</p>
+                {selected.email && <p className="mb-1"><strong>Email:</strong> {selected.email}</p>}
                 <p className="mb-1"><strong>Location:</strong> {selected.location || 'N/A'}</p>
                 {selected.district && <p className="mb-1"><strong>District:</strong> {selected.district}</p>}
                 {selected.sector && <p className="mb-1"><strong>Sector:</strong> {selected.sector}</p>}
@@ -194,8 +213,15 @@ export default function ApplicationsManagement() {
                 <h6 className="fw-bold" style={{ color: '#6B21A8' }}>Parent / Guardian</h6>
                 <p className="mb-1"><strong>Name:</strong> {selected.parent_first_name} {selected.parent_second_name}</p>
                 <p className="mb-1"><strong>Phone:</strong> {selected.parent_phone}</p>
+                <h6 className="fw-bold mt-3" style={{ color: '#6B21A8' }}>Emergency contact</h6>
+                {selected.emergency_name || selected.emergency_phone ? (
+                  <p className="mb-1">{[selected.emergency_name, selected.emergency_relation].filter(Boolean).join(', ')} · {selected.emergency_phone || 'no phone'}</p>
+                ) : (
+                  <p className="mb-1 text-muted small">The parent / guardian above.</p>
+                )}
                 <h6 className="fw-bold mt-3" style={{ color: '#6B21A8' }}>Details</h6>
                 <p className="small text-muted">Applied: {selected.created_at ? new Date(selected.created_at).toLocaleDateString() : 'N/A'}</p>
+                {selected.reviewed_by_name && <p className="small text-muted">Reviewed by: {selected.reviewed_by_name}</p>}
                 {selected.admin_notes && <p className="small"><strong>Notes:</strong> {selected.admin_notes}</p>}
               </Col>
               {selected.status === 'Pending' && (
@@ -217,6 +243,31 @@ export default function ApplicationsManagement() {
               <Button variant="success" onClick={() => handleReview(selected, 'Approved')}><FiCheck className="me-1" /> Approve</Button>
             </>
           )}
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={!!newLogin} onHide={() => setNewLogin(null)} centered backdrop="static">
+        <Modal.Header closeButton>
+          <Modal.Title>Login details for {newLogin?.name}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="mb-2"><strong>Email:</strong> <code>{newLogin?.email}</code></p>
+          <p className="mb-3"><strong>Temporary password:</strong> <code className="fs-5">{newLogin?.temporary_password}</code></p>
+          {newLogin?.emailedTo ? (
+            <div className="alert alert-success small mb-0">
+              These details were also emailed to <strong>{newLogin.emailedTo}</strong>. They are shown here
+              only once; keep a copy in case the email does not arrive.
+            </div>
+          ) : (
+            <div className="alert alert-warning small mb-0">
+              Shown only once. Give these to the member (or their parent) and ask them to change
+              the password after their first login.
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-primary" onClick={copyLogin}><FiCopy className="me-1" /> Copy</Button>
+          <Button variant="primary" onClick={() => setNewLogin(null)}>Done</Button>
         </Modal.Footer>
       </Modal>
     </div>

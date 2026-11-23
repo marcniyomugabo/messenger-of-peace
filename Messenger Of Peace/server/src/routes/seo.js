@@ -5,12 +5,24 @@ const pool = require('../config/db');
 const { authenticate, authorize } = require('../middleware/auth');
 
 // GET / - All SEO settings (authenticated)
-router.get('/', authenticate, async (req, res) => {
+router.get('/', authenticate, authorize('super_admin', 'chief', 'media'), async (req, res) => {
   try {
     const [settings] = await pool.query('SELECT * FROM seo_settings ORDER BY page_slug');
     res.json({ success: true, data: settings });
   } catch (error) {
     console.error('SEO settings list error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// GET /public - every page's title and description, read once by the website.
+router.get('/public', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT page_slug, title, description, keywords, og_image, canonical_url FROM seo_settings');
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('Public SEO error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -80,5 +92,17 @@ router.put(
     }
   }
 );
+
+// DELETE /:page_slug - Remove SEO settings for a page (admin/chief)
+router.delete('/:page_slug', authenticate, authorize('super_admin', 'chief'), async (req, res) => {
+  try {
+    const [result] = await pool.query('DELETE FROM seo_settings WHERE page_slug = ?', [req.params.page_slug]);
+    if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'SEO settings not found' });
+    res.json({ success: true, message: 'SEO settings deleted' });
+  } catch (error) {
+    console.error('Delete SEO settings error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
 
 module.exports = router;

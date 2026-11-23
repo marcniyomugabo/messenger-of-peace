@@ -3,7 +3,9 @@ import { Row, Col, Card, Button, Spinner, Table, Badge } from 'react-bootstrap'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Title, Tooltip, Legend, Filler } from 'chart.js'
 import { FiUsers, FiCheckSquare, FiDollarSign, FiCalendar, FiFileText, FiDownload, FiImage } from 'react-icons/fi'
+import { toast } from 'react-toastify'
 import api from '../../services/api'
+import { downloadAttendanceCsv, RATE_HELP } from '../../utils/attendance'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Title, Tooltip, Legend, Filler)
 
@@ -278,7 +280,7 @@ export default function ReportsPage() {
         <Card className="mop-card">
           <Card.Header className="py-3 d-flex justify-content-between align-items-center">
             <h6 className="mb-0 text-white">Attendance Report</h6>
-            <Button variant="outline-light" size="sm" onClick={() => handleExport('attendance')}>
+            <Button variant="outline-light" size="sm" onClick={() => downloadAttendanceCsv({}).catch(() => toast.error('Could not export'))}>
               <FiDownload className="me-1" /> Export
             </Button>
           </Card.Header>
@@ -286,7 +288,7 @@ export default function ReportsPage() {
             {attendance?.top_attendees?.length > 0 ? (
               <Table className="mop-table mb-0">
                 <thead>
-                  <tr><th>Member</th><th>Unit</th><th>Sessions Present</th><th>Total Sessions</th><th>Rate</th></tr>
+                  <tr><th>Member</th><th>Unit</th><th>Attended</th><th>Counted</th><th title={RATE_HELP}>Rate</th></tr>
                 </thead>
                 <tbody>
                   {attendance.top_attendees.map((a, i) => (
@@ -295,9 +297,7 @@ export default function ReportsPage() {
                       <td>{a.unit_name || 'N/A'}</td>
                       <td>{a.sessions_present}</td>
                       <td>{a.total_sessions}</td>
-                      <td><Badge bg={a.total_sessions > 0 && (a.sessions_present / a.total_sessions) > 0.8 ? 'success' : 'warning'}>
-                        {a.total_sessions > 0 ? Math.round((a.sessions_present / a.total_sessions) * 100) : 0}%
-                      </Badge></td>
+                      <td><Badge bg={a.rate >= 80 ? 'success' : 'warning'}>{a.rate ?? 0}%</Badge></td>
                     </tr>
                   ))}
                 </tbody>
@@ -311,10 +311,14 @@ export default function ReportsPage() {
                 <Row className="g-3">
                   {attendance.by_unit.map((u, i) => (
                     <Col md={4} key={i}>
-                      <div className="text-center p-3 rounded" style={{ background: '#F9FAFB' }}>
-                        <h6>{u.unit_name || 'All Units'}</h6>
-                        <div className="text-muted small">{u.meeting_date}</div>
-                        <div><strong>{u.count}</strong> {u.status}</div>
+                      <div className="text-center p-3 rounded h-100" style={{ background: '#F9FAFB' }}>
+                        <h6>{u.unit_name}</h6>
+                        <div className="fs-4 fw-bold" style={{ color: u.rate == null ? '#9CA3AF' : u.rate >= 80 ? 'var(--mop-success)' : u.rate >= 60 ? '#D97706' : 'var(--mop-danger)' }}>
+                          {u.rate == null ? '–' : `${u.rate}%`}
+                        </div>
+                        <div className="text-muted small">
+                          {u.registers} register(s) · {u.attended} attended · {u.absent} absent · {u.excused} excused
+                        </div>
                       </div>
                     </Col>
                   ))}

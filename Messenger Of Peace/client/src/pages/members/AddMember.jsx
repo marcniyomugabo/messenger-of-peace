@@ -1,19 +1,44 @@
 import { useState, useEffect } from 'react'
 import { Card, Form, Button, Row, Col } from 'react-bootstrap'
-import { FiArrowLeft, FiUserPlus } from 'react-icons/fi'
-import { useNavigate } from 'react-router-dom'
+import { FiArrowLeft, FiUserPlus, FiEdit2 } from 'react-icons/fi'
+import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import api from '../../services/api'
+import { today } from '../../utils/date'
 
+// Add a member (/dashboard/members/new) or edit one (/dashboard/members/:id/edit).
 export default function AddMember() {
   const navigate = useNavigate()
+  const { id } = useParams()
+  const editing = !!id
   const [units, setUnits] = useState([])
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
-    first_name: '', last_name: '', date_of_birth: '', phone: '', whatsapp: '',
+    first_name: '', last_name: '', gender: '', date_of_birth: '', phone: '', whatsapp: '',
+    emergency_name: '', emergency_phone: '', emergency_relation: '',
     email: '', school: '', location: '', unit_id: '', role_in_group: '',
-    skills: '', talents: '', notes: '', monthly_contribution: 500, status: 'Active'
+    skills: '', talents: '', notes: '', monthly_contribution: 500, status: 'Active',
+    join_date: today()
   })
+
+  // Editing: fill the form with the member's record and emergency contact.
+  useEffect(() => {
+    if (!editing) return
+    api.get(`/members/${id}`).then(res => {
+      const m = res.data.data || {}
+      const emergency = (m.guardians || []).find(g => g.is_emergency) || {}
+      const text = v => (v === null || v === undefined ? '' : String(v))
+      setForm(f => ({
+        ...f,
+        first_name: text(m.first_name), last_name: text(m.last_name), gender: text(m.gender), date_of_birth: text(m.date_of_birth),
+        phone: text(m.phone), whatsapp: text(m.whatsapp), email: text(m.email), school: text(m.school), location: text(m.location),
+        unit_id: text(m.unit_id), role_in_group: text(m.role_in_group), skills: text(m.skills), talents: text(m.talents),
+        notes: text(m.notes), monthly_contribution: m.monthly_contribution ?? 500, status: m.status || 'Active',
+        join_date: text(m.join_date),
+        emergency_name: text(emergency.guardian_name), emergency_phone: text(emergency.phone), emergency_relation: text(emergency.relationship),
+      }))
+    }).catch(err => toast.error(err.response?.data?.message || 'Could not load the member'))
+  }, [editing, id])
 
   useEffect(() => {
     api.get('/units').then(res => {
@@ -35,11 +60,17 @@ export default function AddMember() {
     }
     setLoading(true)
     try {
-      await api.post('/members', form)
-      toast.success('Member added successfully')
-      navigate('/dashboard/members')
+      if (editing) {
+        await api.put(`/members/${id}`, form)
+        toast.success('Member saved')
+        navigate(`/dashboard/members/${id}`)
+      } else {
+        await api.post('/members', form)
+        toast.success('Member added successfully')
+        navigate('/dashboard/members')
+      }
     } catch (err) {
-      const msg = err.response?.data?.message || err.response?.data?.error || 'Failed to add member'
+      const msg = err.response?.data?.message || err.response?.data?.error || (editing ? 'Failed to save the member' : 'Failed to add member')
       toast.error(msg)
     } finally {
       setLoading(false)
@@ -49,10 +80,10 @@ export default function AddMember() {
   return (
     <div>
       <div className="d-flex align-items-center gap-3 mb-4">
-        <Button variant="outline-secondary" size="sm" onClick={() => navigate('/dashboard/members')}>
+        <Button variant="outline-secondary" size="sm" onClick={() => navigate(editing ? `/dashboard/members/${id}` : '/dashboard/members')}>
           <FiArrowLeft /> Back
         </Button>
-        <h4 className="mb-0"><FiUserPlus className="me-2" /> Add New Member</h4>
+        <h4 className="mb-0">{editing ? <><FiEdit2 className="me-2" /> Edit Member</> : <><FiUserPlus className="me-2" /> Add New Member</>}</h4>
       </div>
 
       <Card className="border-0 shadow-sm">
@@ -74,8 +105,18 @@ export default function AddMember() {
               </Col>
               <Col md={4}>
                 <Form.Group>
+                  <Form.Label>Gender</Form.Label>
+                  <Form.Select name="gender" value={form.gender} onChange={handleChange}>
+                    <option value="">Not given</option>
+                    <option value="Female">Female</option>
+                    <option value="Male">Male</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group>
                   <Form.Label>Date of Birth</Form.Label>
-                  <Form.Control type="date" name="date_of_birth" value={form.date_of_birth} onChange={handleChange} />
+                  <Form.Control type="date" name="date_of_birth" value={form.date_of_birth} onChange={handleChange} max={today()} />
                 </Form.Group>
               </Col>
               <Col md={4}>
@@ -94,6 +135,29 @@ export default function AddMember() {
                 <Form.Group>
                   <Form.Label>Email</Form.Label>
                   <Form.Control type="email" name="email" value={form.email} onChange={handleChange} placeholder="name@example.com" />
+                </Form.Group>
+              </Col>
+            </Row>
+
+            <h6 className="fw-bold mb-1" style={{ color: '#6B21A8' }}>Emergency Contact</h6>
+            <p className="text-muted small mb-3">Who to call if something happens (usually a parent or guardian).</p>
+            <Row className="g-3 mb-4">
+              <Col md={4}>
+                <Form.Group>
+                  <Form.Label>Name</Form.Label>
+                  <Form.Control name="emergency_name" value={form.emergency_name} onChange={handleChange} maxLength={150} />
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group>
+                  <Form.Label>Phone</Form.Label>
+                  <Form.Control name="emergency_phone" value={form.emergency_phone} onChange={handleChange} maxLength={30} placeholder="+250..." />
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group>
+                  <Form.Label>Relationship</Form.Label>
+                  <Form.Control name="emergency_relation" value={form.emergency_relation} onChange={handleChange} maxLength={60} placeholder="e.g. mother" />
                 </Form.Group>
               </Col>
             </Row>
@@ -125,6 +189,12 @@ export default function AddMember() {
                     <option value="Inactive">Inactive</option>
                     <option value="Applicant">Applicant</option>
                   </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group>
+                  <Form.Label>Join Date</Form.Label>
+                  <Form.Control type="date" name="join_date" value={form.join_date} max={today()} onChange={handleChange} />
                 </Form.Group>
               </Col>
             </Row>
@@ -176,7 +246,7 @@ export default function AddMember() {
             <div className="d-flex gap-2">
               <Button variant="secondary" onClick={() => navigate('/dashboard/members')}>Cancel</Button>
               <Button type="submit" variant="primary" disabled={loading}>
-                {loading ? 'Adding...' : 'Add Member'}
+                {loading ? 'Saving...' : editing ? 'Save Member' : 'Add Member'}
               </Button>
             </div>
           </Form>

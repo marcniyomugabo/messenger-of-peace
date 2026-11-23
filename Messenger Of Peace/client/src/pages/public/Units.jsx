@@ -1,69 +1,14 @@
-import { Container, Row, Col } from 'react-bootstrap'
-import { FiTarget, FiBookOpen, FiHeart, FiStar, FiCheckCircle } from 'react-icons/fi'
+import { Container, Row, Col, Spinner } from 'react-bootstrap'
+import { FiTarget, FiCheckCircle } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
+import { useUnits } from '../../utils/units'
+
+const COUNT_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten']
 
 export default function Units() {
-  const units = [
-    {
-      name: 'Abatoni',
-      ageRange: '6 - 12 years',
-      color: '#6B21A8',
-      icon: '🏕️',
-      desc: 'The youngest section of our scout group. Abatoni provides a fun and nurturing environment where children learn the basics of scouting through games, songs, nature walks, and simple community activities.',
-      activities: [
-        'Nature exploration and environmental games',
-        'Basic first aid and safety awareness',
-        'Storytelling and scouting songs',
-        'Simple craft and art projects',
-        'Introduction to the Scout Promise',
-        'Fun outdoor activities and picnics',
-      ],
-    },
-    {
-      name: 'Inkesha',
-      ageRange: '13 - 16 years',
-      color: '#1D4ED8',
-      icon: '🧭',
-      desc: 'The scout section where young people begin to develop real scouting skills. Inkesha focuses on teamwork, outdoor survival, and community engagement under the guidance of experienced leaders.',
-      activities: [
-        'Camping and outdoor survival skills',
-        'First aid training and emergency response',
-        'Community service projects',
-        'Map reading and compass navigation',
-        'Environmental conservation activities',
-        'Inter-patrol competitions and challenges',
-      ],
-    },
-    {
-      name: 'Abahizi',
-      ageRange: '17 - 20 years',
-      color: '#15803D',
-      icon: '🤝',
-      desc: 'The companion section where young leaders take on real challenges. Abahizi focuses on leadership development, project management, and making a measurable difference in the community.',
-      activities: [
-        'Leadership and project management training',
-        'Community impact projects',
-        'Advanced first aid and rescue skills',
-        'Peer mentoring and youth empowerment',
-        'Scout advancement and badge earning',
-        'Regional and national scouting events',
-      ],
-    },
-    {
-      name: 'Ingenzi',
-      ageRange: '21 - 25 years',
-      color: '#6B21A8',
-      icon: '🌟',
-      desc: 'The rover section for young adults who lead by example. Ingenzi members serve as mentors and role models, driving scouting initiatives and community development projects.',
-      activities: [
-        'Mentoring younger scout units',
-        'Community development projects',
-        'Advanced leadership and life skills',
-        'Event planning and coordination',
-        'Public speaking and advocacy',
-        'National and international scout events',
-      ],
-    },
-  ]
+  // Units, their ages, descriptions and activities are managed in the dashboard (Units).
+  const { units, loaded } = useUnits()
+  const count = COUNT_WORDS[units.length] || String(units.length)
 
   return (
     <div>
@@ -81,7 +26,7 @@ export default function Units() {
           <div className="position-relative" style={{ zIndex: 2 }}>
             <h1 className="mb-3 page-hero-title" style={{ textShadow: '0 2px 20px rgba(0,0,0,0.3)' }}>Our Units</h1>
             <p className="lead mx-auto page-hero-subtitle" style={{ maxWidth: 600, color: '#fff', opacity: 1, textShadow: '0 1px 10px rgba(0,0,0,0.2)' }}>
-              Four specialized units designed for different age groups, each offering
+              {count} specialized {units.length === 1 ? 'unit' : 'units'} designed for different age groups, each offering
               unique programs and growth opportunities
             </p>
           </div>
@@ -90,10 +35,13 @@ export default function Units() {
 
       <section className="py-5">
         <Container>
-          {units.map((unit, idx) => (
+          {!loaded && (
+            <div className="text-center py-5"><Spinner animation="border" style={{ color: '#6B21A8' }} /></div>
+          )}
+          {loaded && units.map((unit, idx) => (
             <Row
-              key={idx}
-              className={`align-items-center g-5 mb-5 ${idx % 2 !== 0 ? 'flex-row-reverse' : ''}`}
+              key={unit.id}
+              className={`align-items-center g-4 g-lg-5 mb-5 ${idx % 2 !== 0 ? 'flex-row-reverse' : ''}`}
             >
               <Col lg={6}>
                 <div className="p-4 rounded-4 h-100 animate-text-reveal" style={{ background: '#f8f5ff', borderLeft: `5px solid ${unit.color}` }}>
@@ -101,15 +49,18 @@ export default function Units() {
                     <span style={{ fontSize: '2.5rem' }}>{unit.icon}</span>
                     <div>
                       <h2 className="mb-0 animate-section-title" style={{ color: unit.color }}>{unit.name}</h2>
-                      <span className="badge" style={{ backgroundColor: unit.color }}>
-                        Ages {unit.ageRange}
-                      </span>
+                      {unit.english && <div className="small fw-semibold" style={{ color: unit.color }}>{unit.english}</div>}
+                      {unit.ageRange && (
+                        <span className="badge" style={{ backgroundColor: unit.color }}>
+                          Ages {unit.ageRange}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <p>{unit.desc}</p>
                 </div>
               </Col>
-              <Col lg={6}>
+              {unit.activities.length > 0 && <Col lg={6}>
                 <div className="p-4 rounded-4 bg-white shadow-sm animate-fade-up">
                   <h5 style={{ color: unit.color }} className="mb-3">
                     <FiTarget className="me-2" /> Activities & Programs
@@ -123,7 +74,7 @@ export default function Units() {
                     ))}
                   </div>
                 </div>
-              </Col>
+              </Col>}
             </Row>
           ))}
         </Container>
@@ -136,9 +87,9 @@ export default function Units() {
           <p className="text-white-50 mx-auto mb-4 animate-section-subtitle" style={{ maxWidth: 500 }}>
             Contact us and we will help you find the perfect unit based on your age and interests.
           </p>
-          <a href="/join-us" className="btn btn-light btn-lg fw-semibold px-5">
+          <Link to="/join-us" className="btn btn-light btn-lg fw-semibold px-5">
             Apply Now
-          </a>
+          </Link>
         </Container>
       </section>
     </div>

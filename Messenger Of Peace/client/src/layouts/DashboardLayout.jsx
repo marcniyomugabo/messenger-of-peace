@@ -1,42 +1,20 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
-import { FiMenu, FiBell, FiUser, FiLogOut } from 'react-icons/fi'
-import api from '../services/api'
+import ChangePasswordModal from '../components/ChangePasswordModal'
+import NotificationBell from '../components/NotificationBell'
+import { FiMenu, FiUser, FiLogOut, FiLock } from 'react-icons/fi'
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user, logout, hasRole } = useAuth()
-  const [notifications, setNotifications] = useState([])
-
-  useEffect(() => {
-    if (user) {
-      loadNotifications()
-    }
-  }, [user])
-
-  const loadNotifications = async () => {
-    try {
-      const res = await api.get('/dashboard')
-      const d = res.data.data
-      const items = []
-      if (d.applications?.pending > 0) {
-        items.push({ text: `${d.applications.pending} pending application(s)`, type: 'warning' })
-      }
-      if (d.members?.applicants > 0) {
-        items.push({ text: `${d.members.applicants} member applicant(s)`, type: 'info' })
-      }
-      setNotifications(items)
-    } catch {
-      // silent
-    }
-  }
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
 
   const getRoleBadge = () => {
     const role = user?.role
     const colors = {
-      super_admin: 'danger',
+      super_admin: 'dark',
       chief: 'primary',
       deputy_chief: 'info',
       secretary: 'success',
@@ -72,15 +50,7 @@ export default function DashboardLayout() {
           </div>
 
           <div className="d-flex align-items-center gap-3">
-            <button className="btn btn-link text-dark position-relative">
-              <FiBell size={20} />
-              {notifications.length > 0 && (
-                <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                  style={{ fontSize: '0.6rem' }}>
-                  {notifications.length}
-                </span>
-              )}
-            </button>
+            <NotificationBell />
 
             <div className="dropdown">
               <button
@@ -97,11 +67,16 @@ export default function DashboardLayout() {
                 <li><span className="dropdown-item-text small text-muted">{user?.email}</span></li>
                 <li><span className="dropdown-item-text small"><span className={`badge bg-${getRoleBadge()}`}>{user?.role}</span></span></li>
                 <li><hr className="dropdown-divider" /></li>
-                {hasRole('super_admin', 'chief') && (
+                {hasRole('super_admin') && (
                   <li><a className="dropdown-item small" href="/dashboard/settings">Settings</a></li>
                 )}
                 <li><a className="dropdown-item small" href="/">Back to Website</a></li>
                 <li><hr className="dropdown-divider" /></li>
+                <li>
+                  <button className="dropdown-item small d-flex align-items-center gap-2" onClick={() => setShowPasswordModal(true)}>
+                    <FiLock /> Change password
+                  </button>
+                </li>
                 <li>
                   <button className="dropdown-item text-danger d-flex align-items-center gap-2" onClick={logout}>
                     <FiLogOut /> Logout
@@ -112,22 +87,12 @@ export default function DashboardLayout() {
           </div>
         </header>
 
-        {notifications.length > 0 && (
-          <div className="px-4 pt-3">
-            <div className="d-flex flex-wrap gap-2">
-              {notifications.map((n, i) => (
-                <span key={i} className={`badge bg-${n.type} d-flex align-items-center gap-1`} style={{ fontSize: '0.75rem' }}>
-                  {n.text}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
         <div className="mop-dashboard-content">
           <Outlet />
         </div>
       </div>
+
+      <ChangePasswordModal show={showPasswordModal} onHide={() => setShowPasswordModal(false)} />
     </div>
   )
 }

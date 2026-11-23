@@ -3,8 +3,13 @@ import { Container, Table, Button, Modal, Form, Badge, Row, Col } from 'react-bo
 import { FiPlus, FiEdit2, FiTrash2, FiCalendar } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import api from '../../services/api'
+import { toLocalInput } from '../../utils/events'
+import { useAuth } from '../../context/AuthContext'
+import { LEADERS } from '../../config/roles'
 
 export default function EventsManagement() {
+  const { hasRole } = useAuth()
+  const canDelete = hasRole(...LEADERS) // the server lets only super admin and chief delete events
   const [events, setEvents] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [editEvent, setEditEvent] = useState(null)
@@ -48,8 +53,8 @@ export default function EventsManagement() {
     setEditEvent(event)
     setForm({
       title: event.title, description: event.description || '', category: event.category || '',
-      start_date: event.start_date ? event.start_date.split('T')[0] : '',
-      end_date: event.end_date ? event.end_date.split('T')[0] : '',
+      start_date: toLocalInput(event.start_date),
+      end_date: toLocalInput(event.end_date),
       venue: event.venue || '', status: event.status
     })
     setShowModal(true)
@@ -112,9 +117,11 @@ export default function EventsManagement() {
                       <Button variant="outline-secondary" size="sm" onClick={() => handleEdit(event)}>
                         <FiEdit2 />
                       </Button>
-                      <Button variant="outline-danger" size="sm" onClick={() => handleDelete(event.id)}>
-                        <FiTrash2 />
-                      </Button>
+                      {canDelete && (
+                        <Button variant="outline-danger" size="sm" onClick={() => handleDelete(event.id)} title="Delete">
+                          <FiTrash2 />
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -171,15 +178,21 @@ export default function EventsManagement() {
               </Col>
               <Col md={6}>
                 <Form.Group>
-                  <Form.Label>Start Date *</Form.Label>
-                  <Form.Control type="date" name="start_date" value={form.start_date} onChange={handleChange} required />
+                  <Form.Label>Starts *</Form.Label>
+                  <Form.Control type="datetime-local" name="start_date" value={form.start_date} onChange={handleChange} required />
                 </Form.Group>
               </Col>
               <Col md={6}>
                 <Form.Group>
-                  <Form.Label>End Date</Form.Label>
-                  <Form.Control type="date" name="end_date" value={form.end_date} onChange={handleChange} />
+                  <Form.Label>Ends</Form.Label>
+                  <Form.Control type="datetime-local" name="end_date" value={form.end_date} onChange={handleChange} min={form.start_date || undefined} />
                 </Form.Group>
+              </Col>
+              <Col md={12}>
+                <Form.Text className="text-muted">
+                  Published, Ongoing, Completed and Cancelled events are shown on the website's Events page; Drafts are not.
+                  The budget is never shown publicly.
+                </Form.Text>
               </Col>
               <Col md={12}>
                 <Form.Group>

@@ -3,13 +3,8 @@ import { Container, Row, Col, Form, Button, Alert, Collapse } from 'react-bootst
 import { toast } from 'react-toastify'
 import { FiUser, FiMapPin, FiPhone, FiBook, FiBriefcase, FiHeart, FiCheck, FiUsers, FiShield } from 'react-icons/fi'
 import api from '../../services/api'
-
-const UNITS = [
-  { id: 'abatoni', name: 'Abatoni', english: 'Cub Scouts', ageRange: '6–12 years', minAge: 6, maxAge: 12, color: '#6B21A8', bg: '#F3E8FF', icon: '🏕️' },
-  { id: 'inkesha', name: 'Inkesha', english: 'Scouts', ageRange: '13–16 years', minAge: 13, maxAge: 16, color: '#1D4ED8', bg: '#DBEAFE', icon: '🧭' },
-  { id: 'abahizi', name: 'Abahizi', english: 'Companions', ageRange: '17–20 years', minAge: 17, maxAge: 20, color: '#15803D', bg: '#DCFCE7', icon: '🤝' },
-  { id: 'ingenzi', name: 'Ingenzi', english: 'Rovers', ageRange: '21–25 years', minAge: 21, maxAge: 25, color: '#6B21A8', bg: '#F3E8FF', icon: '🌟' },
-]
+import { useUnits } from '../../utils/units'
+import { today } from '../../utils/date'
 
 function SectionHeader({ icon: Icon, title, step, color = '#6B21A8' }) {
   return (
@@ -33,7 +28,7 @@ function UnitInfo({ unit }) {
         </div>
         <div>
           <h6 className="mb-0 fw-bold" style={{ color: unit.color }}>{unit.name}</h6>
-          <small style={{ color: unit.color }}>{unit.english} &middot; Ages {unit.ageRange}</small>
+          <small style={{ color: unit.color }}>{[unit.english, unit.ageRange && 'Ages ' + unit.ageRange].filter(Boolean).join(' · ')}</small>
         </div>
       </div>
     </div>
@@ -49,26 +44,24 @@ export default function JoinUs() {
     hasJob: '',
     job: '', company: '', currentActivity: '',
     parentFirstName: '', parentSecondName: '', parentPhone: '',
+    gender: '', dateOfBirth: '', email: '',
+    emergencyName: '', emergencyPhone: '', emergencyRelation: '',
   })
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [appCode, setAppCode] = useState('')
+  const [alreadyApplied, setAlreadyApplied] = useState(false)
   const [validated, setValidated] = useState(false)
-  const [phoneError, setPhoneError] = useState('')
+  // One message per phone field, so the right box turns red.
+  const [phoneErrors, setPhoneErrors] = useState({})
 
-  const selectedUnit = useMemo(() => UNITS.find(u => u.id === form.unit), [form.unit])
+  // Open units come from the dashboard (Units); the value sent is the unit's slug.
+  const { units } = useUnits()
+  const selectedUnit = useMemo(() => units.find(u => u.id === form.unit), [units, form.unit])
   const unitColor = selectedUnit?.color || '#6B21A8'
 
-  const validatePhone = (value) => {
-    const cleaned = value.replace(/[\s\-()]/g, '')
-    const rwRegex = /^(\+2507\d{8}|07\d{8})$/
-    if (!rwRegex.test(cleaned)) {
-      setPhoneError('Please enter a valid Rwanda phone number (e.g. +250 7XX XXX XXX)')
-      return false
-    }
-    setPhoneError('')
-    return true
-  }
+  const isRwPhone = (value) => /^(\+?2507\d{8}|07\d{8})$/.test(String(value || '').replace(/[\s\-().]/g, ''))
+  const PHONE_MSG = 'Please enter a valid Rwanda phone number (e.g. +250 7XX XXX XXX)'
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -99,8 +92,8 @@ export default function JoinUs() {
       newForm.currentActivity = ''
     }
 
-    if (name === 'phone' || name === 'parentPhone') {
-      setPhoneError('')
+    if (phoneErrors[name]) {
+      setPhoneErrors({ ...phoneErrors, [name]: '' })
     }
 
     setForm(newForm)
@@ -112,17 +105,25 @@ export default function JoinUs() {
     if (formEl.checkValidity() === false) {
       e.stopPropagation()
       setValidated(true)
+      // Never fail silently: take the visitor to the first field that needs attention.
+      const firstBad = formEl.querySelector(':invalid')
+      if (firstBad) {
+        firstBad.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        firstBad.focus({ preventScroll: true })
+      }
+      toast.error('Please fill in the fields marked in red.')
       return
     }
 
-    if (!validatePhone(form.phone)) {
+    const badPhones = {}
+    if (!isRwPhone(form.phone)) badPhones.phone = PHONE_MSG
+    if (!isRwPhone(form.parentPhone)) badPhones.parentPhone = PHONE_MSG
+    if (form.emergencyPhone.trim() && !isRwPhone(form.emergencyPhone)) badPhones.emergencyPhone = PHONE_MSG
+    setPhoneErrors(badPhones)
+    if (Object.keys(badPhones).length > 0) {
       e.stopPropagation()
       setValidated(true)
-      return
-    }
-    if (form.parentPhone && !validatePhone(form.parentPhone)) {
-      e.stopPropagation()
-      setValidated(true)
+      toast.error('Please check the phone number(s) marked in red.')
       return
     }
 
@@ -147,12 +148,25 @@ export default function JoinUs() {
         parent_first_name: form.parentFirstName,
         parent_second_name: form.parentSecondName,
         parent_phone: form.parentPhone,
+        gender: form.gender,
+        date_of_birth: form.dateOfBirth,
+        email: form.email.trim() || null,
+        emergency_name: form.emergencyName.trim() || null,
+        emergency_phone: form.emergencyPhone.trim() || null,
+        emergency_relation: form.emergencyRelation.trim() || null,
       }
       const res = await api.post('/member-applications', payload)
       setAppCode(res.data.data?.application_code || '')
       setSubmitted(true)
       toast.success('Application submitted!')
     } catch (err) {
+      // Same phone already waiting for review: show that application's reference instead.
+      if (err.response?.status === 409 && err.response.data?.duplicate) {
+        setAppCode(err.response.data.data?.application_code || '')
+        setAlreadyApplied(true)
+        setSubmitted(true)
+        return
+      }
       toast.error(err.response?.data?.message || 'Failed to submit.')
     } finally { setLoading(false) }
   }
@@ -183,11 +197,15 @@ export default function JoinUs() {
               {submitted ? (
                 <Alert variant="success" className="text-center p-5 rounded-4 border-0 shadow">
                   <div className="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style={{ width: 72, height: 72, background: '#16a34a15' }}>
-                    <FiCheck size={36} style={{ color: '#16a34a' }} />
+                    <FiCheck size={36} style={{ color: 'var(--mop-success)' }} />
                   </div>
-                  <h3 className="mb-2">Application Submitted!</h3>
+                  <h3 className="mb-2">{alreadyApplied ? 'You Have Already Applied' : 'Application Submitted!'}</h3>
                   {appCode && <p className="mb-2"><strong>Reference:</strong> <code className="fs-5">{appCode}</code></p>}
-                  <p className="mb-0">Your membership application has been submitted successfully. Our team will review your application and contact you.</p>
+                  <p className="mb-0">
+                    {alreadyApplied
+                      ? 'An application with this phone number is already waiting for review, so there is no need to send it again. Our team will contact you.'
+                      : 'Your membership application has been submitted successfully. Our team will review your application and contact you.'}
+                  </p>
                 </Alert>
               ) : (
                 <div className="card shadow border-0 rounded-4 overflow-hidden">
@@ -225,9 +243,35 @@ export default function JoinUs() {
                         </Col>
                         <Col md={6}>
                           <Form.Group>
+                            <Form.Label className="fw-semibold">Gender *</Form.Label>
+                            <Form.Select name="gender" value={form.gender} onChange={handleChange} required>
+                              <option value="">Choose</option>
+                              <option value="Female">Female</option>
+                              <option value="Male">Male</option>
+                            </Form.Select>
+                            <Form.Control.Feedback type="invalid">Please choose.</Form.Control.Feedback>
+                          </Form.Group>
+                        </Col>
+                        <Col md={6}>
+                          <Form.Group>
+                            <Form.Label className="fw-semibold">Date of Birth *</Form.Label>
+                            <Form.Control type="date" name="dateOfBirth" value={form.dateOfBirth} onChange={handleChange} required max={today()} />
+                            <Form.Control.Feedback type="invalid">Date of birth is required.</Form.Control.Feedback>
+                          </Form.Group>
+                        </Col>
+                        <Col md={6}>
+                          <Form.Group>
+                            <Form.Label className="fw-semibold">Email <span className="text-muted fw-normal">(optional)</span></Form.Label>
+                            <Form.Control type="email" name="email" value={form.email} onChange={handleChange} placeholder="name@example.com" />
+                            <Form.Control.Feedback type="invalid">Please enter a valid email.</Form.Control.Feedback>
+                            <Form.Text className="text-muted">Used to send you news and, after approval, to reset your password.</Form.Text>
+                          </Form.Group>
+                        </Col>
+                        <Col md={6}>
+                          <Form.Group>
                             <Form.Label className="fw-semibold">Phone Number *</Form.Label>
-                            <Form.Control type="tel" name="phone" value={form.phone} onChange={handleChange} required placeholder="+250 7XX XXX XXX" isInvalid={!!phoneError} />
-                            <Form.Control.Feedback type="invalid">{phoneError || 'Phone number is required.'}</Form.Control.Feedback>
+                            <Form.Control type="tel" name="phone" value={form.phone} onChange={handleChange} required placeholder="+250 7XX XXX XXX" isInvalid={!!phoneErrors.phone} />
+                            <Form.Control.Feedback type="invalid">{phoneErrors.phone || 'Phone number is required.'}</Form.Control.Feedback>
                           </Form.Group>
                         </Col>
                         <Col md={6}>
@@ -268,8 +312,8 @@ export default function JoinUs() {
                             <Form.Label className="fw-semibold">Scout Unit *</Form.Label>
                             <Form.Select name="unit" value={form.unit} onChange={handleChange} required>
                               <option value="">Select Unit</option>
-                              {UNITS.map(u => (
-                                <option key={u.id} value={u.id}>{u.name} — {u.english} — {u.ageRange}</option>
+                              {units.map(u => (
+                                <option key={u.id} value={u.id}>{[u.name, u.english, u.ageRange].filter(Boolean).join(' — ')}</option>
                               ))}
                             </Form.Select>
                             <Form.Control.Feedback type="invalid">Please select a scout unit.</Form.Control.Feedback>
@@ -323,14 +367,14 @@ export default function JoinUs() {
                                 <Col md={6}>
                                   <Form.Group>
                                     <Form.Label className="fw-semibold">Where do you study? *</Form.Label>
-                                    <Form.Control name="schoolName" value={form.schoolName} onChange={handleChange} required placeholder="School / Institution name" />
+                                    <Form.Control name="schoolName" value={form.schoolName} onChange={handleChange} required={form.studying === 'yes'} placeholder="School / Institution name" />
                                     <Form.Control.Feedback type="invalid">School name is required.</Form.Control.Feedback>
                                   </Form.Group>
                                 </Col>
                                 <Col md={6}>
                                   <Form.Group>
                                     <Form.Label className="fw-semibold">Where is your school located? *</Form.Label>
-                                    <Form.Control name="schoolLocation" value={form.schoolLocation} onChange={handleChange} required placeholder="District, Sector, Cell" />
+                                    <Form.Control name="schoolLocation" value={form.schoolLocation} onChange={handleChange} required={form.studying === 'yes'} placeholder="District, Sector, Cell" />
                                     <Form.Control.Feedback type="invalid">School location is required.</Form.Control.Feedback>
                                   </Form.Group>
                                 </Col>
@@ -378,7 +422,7 @@ export default function JoinUs() {
                                     <Col md={6}>
                                       <Form.Group>
                                         <Form.Label className="fw-semibold">Job / Occupation *</Form.Label>
-                                        <Form.Control name="job" value={form.job} onChange={handleChange} required placeholder="Enter the work or occupation you do" />
+                                        <Form.Control name="job" value={form.job} onChange={handleChange} required={form.studying === 'no' && form.hasJob === 'yes'} placeholder="Enter the work or occupation you do" />
                                         <Form.Control.Feedback type="invalid">Job / occupation is required.</Form.Control.Feedback>
                                       </Form.Group>
                                     </Col>
@@ -432,8 +476,32 @@ export default function JoinUs() {
                             <Col md={4}>
                               <Form.Group>
                                 <Form.Label className="fw-semibold">Parent Phone *</Form.Label>
-                                <Form.Control type="tel" name="parentPhone" value={form.parentPhone} onChange={handleChange} required placeholder="+250 7XX XXX XXX" />
-                                <Form.Control.Feedback type="invalid">Required.</Form.Control.Feedback>
+                                <Form.Control type="tel" name="parentPhone" value={form.parentPhone} onChange={handleChange} required placeholder="+250 7XX XXX XXX" isInvalid={!!phoneErrors.parentPhone} />
+                                <Form.Control.Feedback type="invalid">{phoneErrors.parentPhone || 'Required.'}</Form.Control.Feedback>
+                              </Form.Group>
+                            </Col>
+                            <Col xs={12}>
+                              <Form.Text className="text-muted d-block">
+                                The parent / guardian is the emergency contact. If someone else should be called in an emergency, give their details below (optional).
+                              </Form.Text>
+                            </Col>
+                            <Col md={4}>
+                              <Form.Group>
+                                <Form.Label>Emergency contact name</Form.Label>
+                                <Form.Control name="emergencyName" value={form.emergencyName} onChange={handleChange} maxLength={150} placeholder="Full name" />
+                              </Form.Group>
+                            </Col>
+                            <Col md={4}>
+                              <Form.Group>
+                                <Form.Label>Emergency contact phone</Form.Label>
+                                <Form.Control type="tel" name="emergencyPhone" value={form.emergencyPhone} onChange={handleChange} maxLength={30} placeholder="+250 7XX XXX XXX" isInvalid={!!phoneErrors.emergencyPhone} />
+                                <Form.Control.Feedback type="invalid">{phoneErrors.emergencyPhone}</Form.Control.Feedback>
+                              </Form.Group>
+                            </Col>
+                            <Col md={4}>
+                              <Form.Group>
+                                <Form.Label>Relationship</Form.Label>
+                                <Form.Control name="emergencyRelation" value={form.emergencyRelation} onChange={handleChange} maxLength={60} placeholder="e.g. uncle, neighbour" />
                               </Form.Group>
                             </Col>
                           </Row>

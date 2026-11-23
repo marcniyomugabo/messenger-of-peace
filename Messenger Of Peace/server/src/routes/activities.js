@@ -39,7 +39,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /admin - All activities (authenticated)
-router.get('/admin', authenticate, async (req, res) => {
+router.get('/admin', authenticate, authorize('super_admin', 'chief', 'media'), async (req, res) => {
   try {
     const { status, category, search, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
@@ -211,11 +211,11 @@ router.delete(
   }
 );
 
-// POST /categories - Create category (admin)
+// POST /categories - Create category (the leaders who manage Activities)
 router.post(
   '/categories',
   authenticate,
-  authorize('super_admin'),
+  authorize('super_admin', 'chief'),
   [body('name').notEmpty().withMessage('Name is required')],
   async (req, res) => {
     try {
